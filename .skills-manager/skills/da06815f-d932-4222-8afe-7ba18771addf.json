@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "da06815f-d932-4222-8afe-7ba18771addf",
+  "path": "understand-chat",
+  "path_key": "understand-chat",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/Egonex-AI/Understand-Anything.git",
+    "subpath": "understand-anything-plugin\\skills\\understand-chat",
+    "branch": null
+  }
+}

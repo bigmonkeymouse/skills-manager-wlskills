@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "b6f8ea1e-f7bf-4da7-8696-da69faa08c6b",
+  "path": "finishing-a-development-branch",
+  "path_key": "finishing-a-development-branch",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/jnMetaCode/superpowers-zh.git",
+    "subpath": "skills\\finishing-a-development-branch",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "5b0915ab-8224-47d4-99c3-49c8f3c4fcf8",
+  "path": "mao-zedong-perspective",
+  "path_key": "mao-zedong-perspective",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/leezythu/maoxuan-skill.git",
+    "subpath": null,
+    "branch": null
+  }
+}

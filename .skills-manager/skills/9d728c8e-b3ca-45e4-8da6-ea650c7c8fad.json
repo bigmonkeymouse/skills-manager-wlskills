@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "9d728c8e-b3ca-45e4-8da6-ea650c7c8fad",
+  "path": "book-to-skill",
+  "path_key": "book-to-skill",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/virgiliojr94/book-to-skill.git",
+    "subpath": null,
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "1cf6541f-dc91-40e6-8131-d175e399f1be",
+  "path": "drawio-skill",
+  "path_key": "drawio-skill",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/Agents365-ai/drawio-skill.git",
+    "subpath": "skills\\drawio-skill",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "f37a693c-2401-4cd7-adad-552f8b5cb2c6",
+  "path": "karpathy-guidelines",
+  "path_key": "karpathy-guidelines",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/forrestchang/andrej-karpathy-skills.git",
+    "subpath": "skills\\karpathy-guidelines",
+    "branch": null
+  }
+}

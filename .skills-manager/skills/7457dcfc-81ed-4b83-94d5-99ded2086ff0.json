@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "7457dcfc-81ed-4b83-94d5-99ded2086ff0",
+  "path": "understand-knowledge",
+  "path_key": "understand-knowledge",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/Egonex-AI/Understand-Anything.git",
+    "subpath": "understand-anything-plugin\\skills\\understand-knowledge",
+    "branch": null
+  }
+}

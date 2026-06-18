@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "92ca3d2d-bfa9-4de6-8b03-7290dfe5812f",
+  "path": "understand-diff",
+  "path_key": "understand-diff",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/Egonex-AI/Understand-Anything.git",
+    "subpath": "understand-anything-plugin\\skills\\understand-diff",
+    "branch": null
+  }
+}

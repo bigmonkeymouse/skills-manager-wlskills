@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "056fa810-6da7-492d-8cb9-36918ecf8591",
+  "path": "agent-eval",
+  "path_key": "agent-eval",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/colbymchenry/codegraph.git",
+    "subpath": ".claude\\skills\\agent-eval",
+    "branch": null
+  }
+}

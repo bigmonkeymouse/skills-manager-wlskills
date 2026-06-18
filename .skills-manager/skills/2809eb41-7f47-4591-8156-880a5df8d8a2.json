@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "2809eb41-7f47-4591-8156-880a5df8d8a2",
+  "path": "understand-dashboard",
+  "path_key": "understand-dashboard",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/Egonex-AI/Understand-Anything.git",
+    "subpath": "understand-anything-plugin\\skills\\understand-dashboard",
+    "branch": null
+  }
+}

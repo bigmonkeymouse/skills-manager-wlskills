@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "261184b5-dec5-4ce4-bc9f-8fe6403f8e48",
+  "path": "chinese-documentation",
+  "path_key": "chinese-documentation",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/jnMetaCode/superpowers-zh.git",
+    "subpath": "skills\\chinese-documentation",
+    "branch": null
+  }
+}

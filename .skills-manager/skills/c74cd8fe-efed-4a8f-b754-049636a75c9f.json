@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "c74cd8fe-efed-4a8f-b754-049636a75c9f",
+  "path": "understand-onboard",
+  "path_key": "understand-onboard",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/Egonex-AI/Understand-Anything.git",
+    "subpath": "understand-anything-plugin\\skills\\understand-onboard",
+    "branch": null
+  }
+}
