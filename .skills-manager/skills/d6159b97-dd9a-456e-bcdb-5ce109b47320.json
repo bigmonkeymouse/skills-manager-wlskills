@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d6159b97-dd9a-456e-bcdb-5ce109b47320",
+  "path": "matlab-display-volume",
+  "path_key": "matlab-display-volume",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\image-processing-and-computer-vision\\matlab-display-volume",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "1a82fcad-896e-4775-b3c7-31de7196eabf",
+  "path": "matlab-set-up-usrp-radio",
+  "path_key": "matlab-set-up-usrp-radio",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-set-up-usrp-radio",
+    "branch": null
+  }
+}

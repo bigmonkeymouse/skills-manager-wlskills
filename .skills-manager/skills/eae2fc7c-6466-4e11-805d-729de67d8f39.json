@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "eae2fc7c-6466-4e11-805d-729de67d8f39",
+  "path": "matlab-compute-gnss-position",
+  "path_key": "matlab-compute-gnss-position",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\robotics-and-autonomous-systems\\matlab-compute-gnss-position",
+    "branch": null
+  }
+}

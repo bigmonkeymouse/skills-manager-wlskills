@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "a1e828f0-4a57-4227-b13e-6629dc1ae830",
+  "path": "matlab-ocr",
+  "path_key": "matlab-ocr",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\image-processing-and-computer-vision\\matlab-ocr",
+    "branch": null
+  }
+}

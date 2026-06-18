@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "b2688ff6-aac0-4203-a949-25a7523cec66",
+  "path": "matlab-manage-sparameters",
+  "path_key": "matlab-manage-sparameters",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-manage-sparameters",
+    "branch": null
+  }
+}

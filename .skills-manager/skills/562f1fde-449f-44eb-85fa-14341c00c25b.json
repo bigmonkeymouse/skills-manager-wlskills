@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "562f1fde-449f-44eb-85fa-14341c00c25b",
+  "path": "matlab-simulate-bluetooth-network",
+  "path_key": "matlab-simulate-bluetooth-network",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-simulate-bluetooth-network",
+    "branch": null
+  }
+}

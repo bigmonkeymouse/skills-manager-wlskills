@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "370c4adf-cb22-45e2-93f3-bd522e706b8c",
+  "path": "matlab-create-uav-scenario",
+  "path_key": "matlab-create-uav-scenario",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\robotics-and-autonomous-systems\\matlab-create-uav-scenario",
+    "branch": null
+  }
+}

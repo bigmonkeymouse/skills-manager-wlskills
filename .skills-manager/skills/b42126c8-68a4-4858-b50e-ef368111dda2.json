@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "b42126c8-68a4-4858-b50e-ef368111dda2",
+  "path": "matlab-display-image",
+  "path_key": "matlab-display-image",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\image-processing-and-computer-vision\\matlab-display-image",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "985fd43b-fc61-4e2a-a2aa-0ccf3dae3f15",
+  "path": "matlab-testing",
+  "path_key": "matlab-testing",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-core\\matlab-testing",
+    "branch": null
+  }
+}

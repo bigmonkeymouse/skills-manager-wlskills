@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "4a3badc4-38a0-4cd5-bb0b-ec4e9387a580",
+  "path": "matlab-analyze-signal-cwt",
+  "path_key": "matlab-analyze-signal-cwt",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\signal-processing\\matlab-analyze-signal-cwt",
+    "branch": null
+  }
+}

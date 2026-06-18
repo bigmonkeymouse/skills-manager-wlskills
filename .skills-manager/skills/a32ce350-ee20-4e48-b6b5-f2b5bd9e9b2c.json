@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "a32ce350-ee20-4e48-b6b5-f2b5bd9e9b2c",
+  "path": "matlab-design-adaptive-filter",
+  "path_key": "matlab-design-adaptive-filter",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\signal-processing\\matlab-design-adaptive-filter",
+    "branch": null
+  }
+}

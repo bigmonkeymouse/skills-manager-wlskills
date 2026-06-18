@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "745f9d35-08f7-48c8-bb16-994be595bc8f",
+  "path": "roadrunner-import-scene",
+  "path_key": "roadrunner-import-scene",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\automotive\\roadrunner-import-scene",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "4645b786-0486-42e5-a234-2dcb72bbf358",
+  "path": "matlab-import-tracking-data",
+  "path_key": "matlab-import-tracking-data",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\radar\\matlab-import-tracking-data",
+    "branch": null
+  }
+}

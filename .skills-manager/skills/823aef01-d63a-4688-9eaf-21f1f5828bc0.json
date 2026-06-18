@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "823aef01-d63a-4688-9eaf-21f1f5828bc0",
+  "path": "matlab-design-reflectarray",
+  "path_key": "matlab-design-reflectarray",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-reflectarray",
+    "branch": null
+  }
+}

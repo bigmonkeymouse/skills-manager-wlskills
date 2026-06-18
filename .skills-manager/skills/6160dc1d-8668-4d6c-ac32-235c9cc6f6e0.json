@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "6160dc1d-8668-4d6c-ac32-235c9cc6f6e0",
+  "path": "matlab-compose-rf-circuit",
+  "path_key": "matlab-compose-rf-circuit",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-compose-rf-circuit",
+    "branch": null
+  }
+}

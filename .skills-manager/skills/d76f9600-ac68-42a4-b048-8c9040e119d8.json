@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d76f9600-ac68-42a4-b048-8c9040e119d8",
+  "path": "matlab-driving-data-importer",
+  "path_key": "matlab-driving-data-importer",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\automotive\\matlab-driving-data-importer",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "3bb0ae00-c55a-436c-a9b8-18d591a41303",
+  "path": "matlab-generate-wlan-waveform",
+  "path_key": "matlab-generate-wlan-waveform",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-generate-wlan-waveform",
+    "branch": null
+  }
+}

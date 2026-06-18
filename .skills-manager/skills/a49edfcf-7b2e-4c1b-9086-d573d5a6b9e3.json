@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "a49edfcf-7b2e-4c1b-9086-d573d5a6b9e3",
+  "path": "matlab-write-pcb-layout",
+  "path_key": "matlab-write-pcb-layout",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-write-pcb-layout",
+    "branch": null
+  }
+}

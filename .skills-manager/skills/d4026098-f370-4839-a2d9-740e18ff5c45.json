@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d4026098-f370-4839-a2d9-740e18ff5c45",
+  "path": "matlab-exclude-files",
+  "path_key": "matlab-exclude-files",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-exclude-files",
+    "branch": null
+  }
+}

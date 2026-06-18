@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "907e126d-9c44-464a-ba35-c147a05ad4f7",
+  "path": "matlab-model-si-channel",
+  "path_key": "matlab-model-si-channel",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-model-si-channel",
+    "branch": null
+  }
+}

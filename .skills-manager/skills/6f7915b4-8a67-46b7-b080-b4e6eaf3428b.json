@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "6f7915b4-8a67-46b7-b080-b4e6eaf3428b",
+  "path": "matlab-optimize-memory",
+  "path_key": "matlab-optimize-memory",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-optimize-memory",
+    "branch": null
+  }
+}

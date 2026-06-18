@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "4332f856-cac5-437f-93fb-cf7c211e54f8",
+  "path": "matlab-use-duckdb",
+  "path_key": "matlab-use-duckdb",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\reporting-and-database-access\\matlab-use-duckdb",
+    "branch": null
+  }
+}

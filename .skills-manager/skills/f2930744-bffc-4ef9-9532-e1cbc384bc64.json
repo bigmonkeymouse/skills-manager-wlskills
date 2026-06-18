@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "f2930744-bffc-4ef9-9532-e1cbc384bc64",
+  "path": "matlab-scenario-builder",
+  "path_key": "matlab-scenario-builder",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\automotive\\matlab-scenario-builder",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "61527ad9-34eb-424a-8dda-7f8dfe8a4eb7",
+  "path": "matlab-design-array",
+  "path_key": "matlab-design-array",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-array",
+    "branch": null
+  }
+}

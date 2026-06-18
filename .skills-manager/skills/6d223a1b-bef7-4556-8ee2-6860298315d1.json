@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "6d223a1b-bef7-4556-8ee2-6860298315d1",
+  "path": "matlab-call-nidaqmx",
+  "path_key": "matlab-call-nidaqmx",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\test-and-measurement\\matlab-call-nidaqmx",
+    "branch": null
+  }
+}

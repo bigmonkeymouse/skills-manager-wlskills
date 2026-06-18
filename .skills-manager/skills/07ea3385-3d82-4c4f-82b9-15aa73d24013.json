@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "07ea3385-3d82-4c4f-82b9-15aa73d24013",
+  "path": "matlab-fuse-inertial-sensors",
+  "path_key": "matlab-fuse-inertial-sensors",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\robotics-and-autonomous-systems\\matlab-fuse-inertial-sensors",
+    "branch": null
+  }
+}

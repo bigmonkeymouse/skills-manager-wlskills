@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "b6d45521-8de8-4034-91ff-ed1a7c27e9fa",
+  "path": "roadrunner-convert-lanelet2-to-rrhd",
+  "path_key": "roadrunner-convert-lanelet2-to-rrhd",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\automotive\\roadrunner-convert-lanelet2-to-rrhd",
+    "branch": null
+  }
+}

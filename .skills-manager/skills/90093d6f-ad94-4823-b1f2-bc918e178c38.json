@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "90093d6f-ad94-4823-b1f2-bc918e178c38",
+  "path": "matlab-analyze-rcs",
+  "path_key": "matlab-analyze-rcs",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-analyze-rcs",
+    "branch": null
+  }
+}

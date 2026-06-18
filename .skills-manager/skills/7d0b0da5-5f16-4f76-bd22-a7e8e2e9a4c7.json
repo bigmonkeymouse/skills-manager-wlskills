@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "7d0b0da5-5f16-4f76-bd22-a7e8e2e9a4c7",
+  "path": "matlab-write-performance-tests",
+  "path_key": "matlab-write-performance-tests",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-write-performance-tests",
+    "branch": null
+  }
+}

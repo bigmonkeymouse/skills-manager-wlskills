@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "2de7a106-79d9-41e3-aaa3-17314c05e1ed",
+  "path": "matlab-export-session-script",
+  "path_key": "matlab-export-session-script",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-export-session-script",
+    "branch": null
+  }
+}

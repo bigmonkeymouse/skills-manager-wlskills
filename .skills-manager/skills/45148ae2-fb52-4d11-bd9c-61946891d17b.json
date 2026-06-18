@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "45148ae2-fb52-4d11-bd9c-61946891d17b",
+  "path": "matlab-fit-rational-model",
+  "path_key": "matlab-fit-rational-model",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-fit-rational-model",
+    "branch": null
+  }
+}

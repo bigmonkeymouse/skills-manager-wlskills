@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "e652f369-258b-4109-b2c0-23786f763eca",
+  "path": "matlab-analyze-rf-budget",
+  "path_key": "matlab-analyze-rf-budget",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-analyze-rf-budget",
+    "branch": null
+  }
+}

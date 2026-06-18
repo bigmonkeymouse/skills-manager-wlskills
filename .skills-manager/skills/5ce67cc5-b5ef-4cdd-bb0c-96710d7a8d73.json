@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "5ce67cc5-b5ef-4cdd-bb0c-96710d7a8d73",
+  "path": "matlab-deembed-rf-cascade",
+  "path_key": "matlab-deembed-rf-cascade",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-deembed-rf-cascade",
+    "branch": null
+  }
+}

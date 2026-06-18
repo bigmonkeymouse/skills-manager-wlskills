@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "0d6cf5e9-1508-4106-b9f6-abb8ad9f78f3",
+  "path": "matlab-design-reflector-antenna",
+  "path_key": "matlab-design-reflector-antenna",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-reflector-antenna",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "f16478f9-2dfe-4aeb-8cba-1cf477601edb",
+  "path": "matlab-publish-toolbox",
+  "path_key": "matlab-publish-toolbox",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-publish-toolbox",
+    "branch": null
+  }
+}

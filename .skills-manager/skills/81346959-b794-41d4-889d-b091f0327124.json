@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "81346959-b794-41d4-889d-b091f0327124",
+  "path": "matlab-create-measured-antenna",
+  "path_key": "matlab-create-measured-antenna",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-create-measured-antenna",
+    "branch": null
+  }
+}

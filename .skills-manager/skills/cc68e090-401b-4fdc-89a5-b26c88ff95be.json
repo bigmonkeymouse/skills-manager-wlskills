@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "cc68e090-401b-4fdc-89a5-b26c88ff95be",
+  "path": "matlab-analyze-dependencies",
+  "path_key": "matlab-analyze-dependencies",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-analyze-dependencies",
+    "branch": null
+  }
+}

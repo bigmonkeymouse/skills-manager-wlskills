@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "78463f0a-9dfa-4617-ac33-479d96cfb0eb",
+  "path": "matlab-design-antenna-matching-network",
+  "path_key": "matlab-design-antenna-matching-network",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-antenna-matching-network",
+    "branch": null
+  }
+}

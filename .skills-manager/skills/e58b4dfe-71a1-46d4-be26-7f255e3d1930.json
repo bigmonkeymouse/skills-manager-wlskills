@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "e58b4dfe-71a1-46d4-be26-7f255e3d1930",
+  "path": "matlab-train-network",
+  "path_key": "matlab-train-network",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\ai-and-statistics\\matlab-train-network",
+    "branch": null
+  }
+}

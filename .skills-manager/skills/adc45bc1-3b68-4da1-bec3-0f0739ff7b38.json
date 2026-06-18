@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "adc45bc1-3b68-4da1-bec3-0f0739ff7b38",
+  "path": "matlab-create-project",
+  "path_key": "matlab-create-project",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-create-project",
+    "branch": null
+  }
+}

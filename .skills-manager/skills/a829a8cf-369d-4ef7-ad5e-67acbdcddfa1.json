@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "a829a8cf-369d-4ef7-ad5e-67acbdcddfa1",
+  "path": "matlab-optimize-pcb-design",
+  "path_key": "matlab-optimize-pcb-design",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-optimize-pcb-design",
+    "branch": null
+  }
+}

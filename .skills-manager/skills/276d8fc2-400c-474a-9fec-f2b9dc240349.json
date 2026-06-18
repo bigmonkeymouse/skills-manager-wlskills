@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "276d8fc2-400c-474a-9fec-f2b9dc240349",
+  "path": "matlab-analyze-rf-propagation",
+  "path_key": "matlab-analyze-rf-propagation",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-analyze-rf-propagation",
+    "branch": null
+  }
+}

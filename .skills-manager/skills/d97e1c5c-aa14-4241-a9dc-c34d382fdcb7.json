@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d97e1c5c-aa14-4241-a9dc-c34d382fdcb7",
+  "path": "matlab-design-pcb-filter",
+  "path_key": "matlab-design-pcb-filter",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-pcb-filter",
+    "branch": null
+  }
+}

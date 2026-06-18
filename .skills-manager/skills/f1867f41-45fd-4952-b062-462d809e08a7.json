@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "f1867f41-45fd-4952-b062-462d809e08a7",
+  "path": "matlab-dsphdl-ddc-design",
+  "path_key": "matlab-dsphdl-ddc-design",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\signal-processing\\matlab-dsphdl-ddc-design",
+    "branch": null
+  }
+}

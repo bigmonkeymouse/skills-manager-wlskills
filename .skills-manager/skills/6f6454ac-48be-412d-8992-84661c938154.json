@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "6f6454ac-48be-412d-8992-84661c938154",
+  "path": "roadrunner-asset-mapping",
+  "path_key": "roadrunner-asset-mapping",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\automotive\\roadrunner-asset-mapping",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "ba60218d-1062-49af-86e2-1012bb7449f3",
+  "path": "matlab-optimize-performance",
+  "path_key": "matlab-optimize-performance",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-optimize-performance",
+    "branch": null
+  }
+}

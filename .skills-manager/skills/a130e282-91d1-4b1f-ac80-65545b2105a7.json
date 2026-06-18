@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "a130e282-91d1-4b1f-ac80-65545b2105a7",
+  "path": "matlab-write-database",
+  "path_key": "matlab-write-database",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\reporting-and-database-access\\matlab-write-database",
+    "branch": null
+  }
+}

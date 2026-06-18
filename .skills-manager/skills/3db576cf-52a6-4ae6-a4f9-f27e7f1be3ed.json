@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "3db576cf-52a6-4ae6-a4f9-f27e7f1be3ed",
+  "path": "matlab-add-awgn",
+  "path_key": "matlab-add-awgn",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-add-awgn",
+    "branch": null
+  }
+}

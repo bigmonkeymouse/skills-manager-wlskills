@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "5f4fa2ec-2278-4a2c-8308-2449488af964",
+  "path": "matlab-list-products",
+  "path_key": "matlab-list-products",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-core\\matlab-list-products",
+    "branch": null
+  }
+}

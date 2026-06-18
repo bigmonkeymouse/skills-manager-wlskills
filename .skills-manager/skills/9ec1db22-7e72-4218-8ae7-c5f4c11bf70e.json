@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "9ec1db22-7e72-4218-8ae7-c5f4c11bf70e",
+  "path": "matlab-create-buildfile",
+  "path_key": "matlab-create-buildfile",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-create-buildfile",
+    "branch": null
+  }
+}

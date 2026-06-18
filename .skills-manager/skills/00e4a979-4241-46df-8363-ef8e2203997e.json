@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "00e4a979-4241-46df-8363-ef8e2203997e",
+  "path": "matlab-analyze-em",
+  "path_key": "matlab-analyze-em",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-analyze-em",
+    "branch": null
+  }
+}

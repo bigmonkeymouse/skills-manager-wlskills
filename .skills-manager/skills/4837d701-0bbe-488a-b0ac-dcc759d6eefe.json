@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "4837d701-0bbe-488a-b0ac-dcc759d6eefe",
+  "path": "matlab-generate-gnss-waveform",
+  "path_key": "matlab-generate-gnss-waveform",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-generate-gnss-waveform",
+    "branch": null
+  }
+}

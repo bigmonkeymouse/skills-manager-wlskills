@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "3749f881-b2c3-4ea7-ba59-87d120b19054",
+  "path": "matlab-create-custom-antenna",
+  "path_key": "matlab-create-custom-antenna",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-create-custom-antenna",
+    "branch": null
+  }
+}

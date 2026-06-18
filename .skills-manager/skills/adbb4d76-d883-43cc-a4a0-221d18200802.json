@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "adbb4d76-d883-43cc-a4a0-221d18200802",
+  "path": "matlab-analyze-rf-mixer",
+  "path_key": "matlab-analyze-rf-mixer",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-analyze-rf-mixer",
+    "branch": null
+  }
+}

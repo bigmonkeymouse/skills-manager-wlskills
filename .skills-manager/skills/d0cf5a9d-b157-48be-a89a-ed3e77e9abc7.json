@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d0cf5a9d-b157-48be-a89a-ed3e77e9abc7",
+  "path": "matlab-design-pcb-passive",
+  "path_key": "matlab-design-pcb-passive",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-pcb-passive",
+    "branch": null
+  }
+}

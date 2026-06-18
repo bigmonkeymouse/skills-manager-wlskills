@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "37589966-67db-4e7a-a234-a5b147562f32",
+  "path": "matlab-create-ai-antenna",
+  "path_key": "matlab-create-ai-antenna",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-create-ai-antenna",
+    "branch": null
+  }
+}

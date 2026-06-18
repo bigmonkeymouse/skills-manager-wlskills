@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "bf0ee958-a7ba-4605-bd46-7f285f5fb94a",
+  "path": "matlab-setup-worker-state",
+  "path_key": "matlab-setup-worker-state",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\parallel-computing\\matlab-setup-worker-state",
+    "branch": null
+  }
+}

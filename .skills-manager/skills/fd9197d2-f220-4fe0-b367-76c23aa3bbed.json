@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "fd9197d2-f220-4fe0-b367-76c23aa3bbed",
+  "path": "matlab-fit-simbiology-model",
+  "path_key": "matlab-fit-simbiology-model",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\computational-biology\\matlab-fit-simbiology-model",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "4c9b0268-5a1a-4e86-b58f-b942342890d9",
+  "path": "matlab-read-pcb-layout",
+  "path_key": "matlab-read-pcb-layout",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-read-pcb-layout",
+    "branch": null
+  }
+}

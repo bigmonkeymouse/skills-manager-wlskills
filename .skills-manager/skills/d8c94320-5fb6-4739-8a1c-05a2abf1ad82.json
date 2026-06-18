@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d8c94320-5fb6-4739-8a1c-05a2abf1ad82",
+  "path": "matlab-analyze-pcb-pdn",
+  "path_key": "matlab-analyze-pcb-pdn",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-analyze-pcb-pdn",
+    "branch": null
+  }
+}

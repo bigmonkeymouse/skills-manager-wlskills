@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "06286325-e5ab-4c7e-bb76-182ba6aa9942",
+  "path": "matlab-simulate-rf-system",
+  "path_key": "matlab-simulate-rf-system",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-simulate-rf-system",
+    "branch": null
+  }
+}

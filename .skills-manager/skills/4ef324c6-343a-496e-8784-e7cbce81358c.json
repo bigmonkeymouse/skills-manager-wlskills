@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "4ef324c6-343a-496e-8784-e7cbce81358c",
+  "path": "matlab-build-toolbox",
+  "path_key": "matlab-build-toolbox",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-build-toolbox",
+    "branch": null
+  }
+}

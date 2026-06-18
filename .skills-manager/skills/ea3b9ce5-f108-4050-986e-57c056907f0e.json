@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "ea3b9ce5-f108-4050-986e-57c056907f0e",
+  "path": "matlab-connect-mavlink",
+  "path_key": "matlab-connect-mavlink",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\robotics-and-autonomous-systems\\matlab-connect-mavlink",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "a936984a-4f7e-4c6e-81d8-e38a3b5e5e25",
+  "path": "matlab-process-large-images",
+  "path_key": "matlab-process-large-images",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\image-processing-and-computer-vision\\matlab-process-large-images",
+    "branch": null
+  }
+}

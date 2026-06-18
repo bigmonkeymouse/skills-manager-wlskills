@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "72a46528-a52f-47fd-ab0f-3bd8a74f0117",
+  "path": "matlab-convert-network-parameters",
+  "path_key": "matlab-convert-network-parameters",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-convert-network-parameters",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d7bde3ba-8d5d-4714-af1f-f11c174efaa2",
+  "path": "matlab-setup-gpu",
+  "path_key": "matlab-setup-gpu",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\parallel-computing\\matlab-setup-gpu",
+    "branch": null
+  }
+}

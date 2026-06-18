@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d1d05537-364e-46c0-96a0-239e8c651ec9",
+  "path": "matlab-design-digital-filter",
+  "path_key": "matlab-design-digital-filter",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\signal-processing\\matlab-design-digital-filter",
+    "branch": null
+  }
+}

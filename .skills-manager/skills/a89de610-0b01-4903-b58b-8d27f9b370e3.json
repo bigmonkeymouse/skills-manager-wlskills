@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "a89de610-0b01-4903-b58b-8d27f9b370e3",
+  "path": "matlab-integrate-pcb-circuit",
+  "path_key": "matlab-integrate-pcb-circuit",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-integrate-pcb-circuit",
+    "branch": null
+  }
+}

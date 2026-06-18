@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "01558687-8dc2-4971-9a06-283cf034ba9a",
+  "path": "matlab-assemble-pcb-layout",
+  "path_key": "matlab-assemble-pcb-layout",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-assemble-pcb-layout",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "3ea1cb66-dcd5-4da6-a1fa-e9bca5efc491",
+  "path": "matlab-create-live-script",
+  "path_key": "matlab-create-live-script",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-core\\matlab-create-live-script",
+    "branch": null
+  }
+}

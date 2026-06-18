@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d5baf0e0-4342-44f7-a9ae-dfe9dfbbb583",
+  "path": "matlab-generate-ble-waveform",
+  "path_key": "matlab-generate-ble-waveform",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-generate-ble-waveform",
+    "branch": null
+  }
+}

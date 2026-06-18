@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "87c68c53-cf3b-4c92-bfea-c62dfe7e8c2c",
+  "path": "matlab-estimate-sar",
+  "path_key": "matlab-estimate-sar",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-estimate-sar",
+    "branch": null
+  }
+}

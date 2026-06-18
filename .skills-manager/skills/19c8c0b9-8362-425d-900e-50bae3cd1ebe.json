@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "19c8c0b9-8362-425d-900e-50bae3cd1ebe",
+  "path": "matlab-modernize-code",
+  "path_key": "matlab-modernize-code",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-modernize-code",
+    "branch": null
+  }
+}

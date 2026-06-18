@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "ad5c817e-3490-429e-ab2f-fc6d72a6735e",
+  "path": "matlab-optimize-antenna",
+  "path_key": "matlab-optimize-antenna",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-optimize-antenna",
+    "branch": null
+  }
+}

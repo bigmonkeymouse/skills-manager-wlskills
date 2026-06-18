@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "2f65dbb3-dc32-46a5-b988-8fe1ce03255a",
+  "path": "matlab-model-via",
+  "path_key": "matlab-model-via",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-model-via",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "cccca7c5-8e18-42df-8b86-f38a7bb2ea51",
+  "path": "matlab-design-radar-waveform",
+  "path_key": "matlab-design-radar-waveform",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\radar\\matlab-design-radar-waveform",
+    "branch": null
+  }
+}

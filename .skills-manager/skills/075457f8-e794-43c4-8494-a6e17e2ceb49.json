@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "075457f8-e794-43c4-8494-a6e17e2ceb49",
+  "path": "matlab-debugging",
+  "path_key": "matlab-debugging",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-core\\matlab-debugging",
+    "branch": null
+  }
+}

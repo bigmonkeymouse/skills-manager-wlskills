@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "f47536cf-1f78-433b-858e-b0d6dd490c3c",
+  "path": "matlab-validate-function-arguments",
+  "path_key": "matlab-validate-function-arguments",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-programming\\matlab-validate-function-arguments",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "87bf058e-f664-4c04-a47e-52765d8cd3a6",
+  "path": "matlab-map-database-objects",
+  "path_key": "matlab-map-database-objects",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\reporting-and-database-access\\matlab-map-database-objects",
+    "branch": null
+  }
+}

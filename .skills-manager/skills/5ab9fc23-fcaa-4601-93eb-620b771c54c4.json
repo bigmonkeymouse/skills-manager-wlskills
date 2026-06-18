@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "5ab9fc23-fcaa-4601-93eb-620b771c54c4",
+  "path": "matlab-design-pcb-coupler",
+  "path_key": "matlab-design-pcb-coupler",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-pcb-coupler",
+    "branch": null
+  }
+}

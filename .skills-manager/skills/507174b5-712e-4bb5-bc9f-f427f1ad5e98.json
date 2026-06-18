@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "507174b5-712e-4bb5-bc9f-f427f1ad5e98",
+  "path": "matlab-read-database",
+  "path_key": "matlab-read-database",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\reporting-and-database-access\\matlab-read-database",
+    "branch": null
+  }
+}

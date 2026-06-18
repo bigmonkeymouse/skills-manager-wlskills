@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "fb0e9bcf-285c-4e6b-9328-2541de1a1424",
+  "path": "matlab-design-antenna",
+  "path_key": "matlab-design-antenna",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-antenna",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "e7231c37-2df5-40ef-96ba-fd0013ac2dfb",
+  "path": "matlab-configure-scope-object",
+  "path_key": "matlab-configure-scope-object",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\signal-processing\\matlab-configure-scope-object",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "5e4aee46-7350-4754-aa1c-a363c93c238a",
+  "path": "matlab-generate-5g-waveform",
+  "path_key": "matlab-generate-5g-waveform",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-generate-5g-waveform",
+    "branch": null
+  }
+}

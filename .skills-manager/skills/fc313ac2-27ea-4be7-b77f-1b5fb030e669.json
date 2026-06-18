@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "fc313ac2-27ea-4be7-b77f-1b5fb030e669",
+  "path": "matlab-agentic-toolkit-setup",
+  "path_key": "matlab-agentic-toolkit-setup",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\toolkit\\matlab-agentic-toolkit-setup",
+    "branch": null
+  }
+}

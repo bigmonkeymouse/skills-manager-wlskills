@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "cde4b69b-b415-4ca4-bdad-30f3dee1ce55",
+  "path": "roadrunner-rrhd-authoring",
+  "path_key": "roadrunner-rrhd-authoring",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\automotive\\roadrunner-rrhd-authoring",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "d3a0078d-6ba0-426a-b990-c91a2b786d65",
+  "path": "matlab-create-rfbudget-elements",
+  "path_key": "matlab-create-rfbudget-elements",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-create-rfbudget-elements",
+    "branch": null
+  }
+}

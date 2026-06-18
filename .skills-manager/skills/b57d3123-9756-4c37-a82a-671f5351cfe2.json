@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "b57d3123-9756-4c37-a82a-671f5351cfe2",
+  "path": "matlab-analyze-installed-antenna",
+  "path_key": "matlab-analyze-installed-antenna",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-analyze-installed-antenna",
+    "branch": null
+  }
+}

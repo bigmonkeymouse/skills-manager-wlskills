@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "47efe046-78ea-4584-b634-12b1d6c667ba",
+  "path": "matlab-discover-clusters",
+  "path_key": "matlab-discover-clusters",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\parallel-computing\\matlab-discover-clusters",
+    "branch": null
+  }
+}

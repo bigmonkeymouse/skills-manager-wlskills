@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "acb69e98-7498-420b-b5aa-3e33884aa13e",
+  "path": "matlab-assess-toolbox",
+  "path_key": "matlab-assess-toolbox",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-assess-toolbox",
+    "branch": null
+  }
+}

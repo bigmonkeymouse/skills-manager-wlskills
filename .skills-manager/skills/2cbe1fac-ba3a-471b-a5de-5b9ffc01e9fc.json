@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "2cbe1fac-ba3a-471b-a5de-5b9ffc01e9fc",
+  "path": "matlab-manage-pcb-material",
+  "path_key": "matlab-manage-pcb-material",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-manage-pcb-material",
+    "branch": null
+  }
+}

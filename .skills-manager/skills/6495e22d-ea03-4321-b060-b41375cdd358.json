@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "6495e22d-ea03-4321-b060-b41375cdd358",
+  "path": "matlab-model-serdes-systems",
+  "path_key": "matlab-model-serdes-systems",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-model-serdes-systems",
+    "branch": null
+  }
+}

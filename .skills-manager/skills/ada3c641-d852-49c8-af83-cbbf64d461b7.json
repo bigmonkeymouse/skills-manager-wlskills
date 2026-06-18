@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "ada3c641-d852-49c8-af83-cbbf64d461b7",
+  "path": "matlab-process-rf-baseband",
+  "path_key": "matlab-process-rf-baseband",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-process-rf-baseband",
+    "branch": null
+  }
+}

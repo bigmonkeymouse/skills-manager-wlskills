@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "1b1bec2c-05a3-4e5b-b607-17e921edb635",
+  "path": "matlab-simulate-wireless-network",
+  "path_key": "matlab-simulate-wireless-network",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\wireless-communications\\matlab-simulate-wireless-network",
+    "branch": null
+  }
+}

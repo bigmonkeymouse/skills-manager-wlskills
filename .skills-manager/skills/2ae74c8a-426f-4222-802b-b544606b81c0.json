@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "2ae74c8a-426f-4222-802b-b544606b81c0",
+  "path": "matlab-connect-databricks-jdbc",
+  "path_key": "matlab-connect-databricks-jdbc",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\reporting-and-database-access\\matlab-connect-databricks-jdbc",
+    "branch": null
+  }
+}

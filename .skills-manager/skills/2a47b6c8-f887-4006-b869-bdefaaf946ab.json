@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "2a47b6c8-f887-4006-b869-bdefaaf946ab",
+  "path": "matlab-document-toolbox",
+  "path_key": "matlab-document-toolbox",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\matlab-software-development\\matlab-document-toolbox",
+    "branch": null
+  }
+}

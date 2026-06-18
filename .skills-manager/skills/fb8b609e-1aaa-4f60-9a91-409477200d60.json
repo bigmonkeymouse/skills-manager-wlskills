@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "fb8b609e-1aaa-4f60-9a91-409477200d60",
+  "path": "matlab-design-pcb-txline",
+  "path_key": "matlab-design-pcb-txline",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\rf-and-mixed-signal\\matlab-design-pcb-txline",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "5a5f8a8a-e731-4f20-bdf4-c6401775aa14",
+  "path": "matlab-connect-opcua-client",
+  "path_key": "matlab-connect-opcua-client",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\test-and-measurement\\matlab-connect-opcua-client",
+    "branch": null
+  }
+}

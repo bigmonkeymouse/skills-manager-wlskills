@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "9e2dfd4b-79d4-4bf2-bf03-c8d6a6459785",
+  "path": "matlab-simulate-simbiology-model",
+  "path_key": "matlab-simulate-simbiology-model",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\computational-biology\\matlab-simulate-simbiology-model",
+    "branch": null
+  }
+}

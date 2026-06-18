@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "20a22002-533d-4578-90c6-9979399ea144",
+  "path": "matlab-discover-opcua-servers",
+  "path_key": "matlab-discover-opcua-servers",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/matlab/matlab-agentic-toolkit.git",
+    "subpath": "skills-catalog\\test-and-measurement\\matlab-discover-opcua-servers",
+    "branch": null
+  }
+}
