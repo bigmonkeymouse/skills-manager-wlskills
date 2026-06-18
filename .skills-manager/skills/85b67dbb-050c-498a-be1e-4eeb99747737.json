@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "85b67dbb-050c-498a-be1e-4eeb99747737",
+  "path": "ppt-master",
+  "path_key": "ppt-master",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/hugohe3/ppt-master.git",
+    "subpath": "skills\\ppt-master",
+    "branch": null
+  }
+}
