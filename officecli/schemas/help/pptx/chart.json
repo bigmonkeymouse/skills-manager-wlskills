@@ -113,13 +113,13 @@
         "waterfall", "funnel", "treemap", "sunburst",
         "boxWhisker", "histogram", "pareto"
       ],
-      "description": "pptx override: chartType is consumed by AddChart (creation only). Switching chart type post-creation is not supported — rebuild the chart with the new type.",
+      "description": "pptx override: chartType is consumed by AddChart (creation only). Switching chart type post-creation is not supported — rebuild the chart with the new type. INPUT is lenient and accepts friendly aliases (stackedArea, bar3D, percentStackedColumn, stackedLine, percentStackedBar, ...) which round-trip correctly. READBACK (Get) is intentionally NOT symmetric with input: it returns the systematic `base_modifier` token form — e.g. area_stacked, area_percentStacked, bar_stacked, bar_percentStacked, bar3d, column_stacked, column_percentStacked, line_stacked, line_percentStacked, pieOfPie, barOfPie. This canonical-readback form is by design (one systematic token per geometry); do not expect the readback to echo the friendly input alias.",
       "aliases": ["type"],
       "add": true,
       "set": false,
       "get": true,
-      "examples": ["--prop chartType=column"],
-      "readback": "normalized chartType string",
+      "examples": ["--prop chartType=column", "--prop chartType=stackedArea   # readback: area_stacked", "--prop chartType=bar3D   # readback: bar3d"],
+      "readback": "systematic base_modifier token (e.g. area_stacked, bar_percentStacked, column_stacked, line_stacked, bar3d, pieOfPie, barOfPie) — NOT the friendly input alias",
       "enforcement": "report"
     },
     "name": {

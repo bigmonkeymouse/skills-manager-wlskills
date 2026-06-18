@@ -23,6 +23,16 @@
     "_shared/chart-series.pptx-xlsx"
   ],
   "properties": {
+    "x": {
+      "type": "string",
+      "description": "scatter/bubble per-series X values (the numeric X domain read from <c:xVal>). Read-only readback key surfaced by Get on scatter/bubble series. X data is supplied at Add time through the chart-level `categories=` list (scatter/bubble map categories onto the X axis), not via a per-series Set. Functional but previously undocumented.",
+      "add": false,
+      "set": false,
+      "get": true,
+      "examples": ["officecli get deck.pptx \"/slide[1]/chart[1]/series[1]\"  # → x: 1,2,3"],
+      "readback": "comma-separated numeric X values",
+      "enforcement": "report"
+    },
     "categories": {
       "type": "string",
       "description": "per-series category override; range reference only. pptx override: not supported on per-series Set (handler rejects categories on /chart[N]/series[N] paths). Set categories at chart level via `categories=...` instead.",

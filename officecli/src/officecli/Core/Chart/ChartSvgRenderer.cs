@@ -761,6 +761,37 @@ internal partial class ChartSvgRenderer
         }
     }
 
+    /// <summary>
+    /// Convert raw per-series values into cumulative (stacked) values: series s
+    /// at category c becomes the running sum of series 0..s at c. When percent,
+    /// each category's stack is first normalized to 100% of the column total.
+    /// </summary>
+    private static List<(string name, double[] values)> StackSeries(
+        List<(string name, double[] values)> series, bool percent)
+    {
+        if (series.Count == 0) return series;
+        int catCount = series.Max(s => s.values.Length);
+        var result = new List<(string name, double[] values)>(series.Count);
+        for (int s = 0; s < series.Count; s++)
+            result.Add((series[s].name, new double[catCount]));
+        for (int c = 0; c < catCount; c++)
+        {
+            double colTotal = 0;
+            if (percent)
+                for (int s = 0; s < series.Count; s++)
+                    colTotal += c < series[s].values.Length ? series[s].values[c] : 0;
+            double running = 0;
+            for (int s = 0; s < series.Count; s++)
+            {
+                var v = c < series[s].values.Length ? series[s].values[c] : 0;
+                if (percent) v = colTotal > 0 ? v / colTotal * 100.0 : 0;
+                running += v;
+                result[s].values[c] = running;
+            }
+        }
+        return result;
+    }
+
     public void RenderLineChartSvg(StringBuilder sb, List<(string name, double[] values)> series,
         string[] categories, List<string> colors, int ox, int oy, int pw, int ph,
         bool showDataLabels = false, List<string>? markerShapes = null, List<int>? markerSizes = null,
@@ -773,9 +804,16 @@ internal partial class ChartSvgRenderer
         string? dropLineColor = null, double dropLineWidth = 0.7, string? dropLineDash = null,
         string? highLowLineColor = null, double highLowLineWidth = 1,
         List<TrendlineInfo?>? trendlines = null, List<ErrorBarInfo?>? errorBars = null,
-        bool scatterMarkersOnly = false)
+        bool scatterMarkersOnly = false, bool stacked = false, bool percent = false)
     {
         bool isLog = logBase.HasValue && logBase.Value > 1;
+
+        // R16-3: stacked / percentStacked line — each series is plotted at the
+        // cumulative sum of itself and all series below it. Percent normalizes
+        // each category's stack to 100. Transform the series up-front so axis
+        // scaling, markers, and labels all reflect the stacked geometry.
+        if (stacked || percent)
+            series = StackSeries(series, percent);
 
         var allValues = series.SelectMany(s => s.values).ToArray();
         if (allValues.Length == 0) return;
@@ -1152,20 +1190,124 @@ internal partial class ChartSvgRenderer
         }
     }
 
+    /// <summary>
+    /// pieOfPie / barOfPie composite. The single data series is split into a
+    /// "main" group (the leading points) and a "secondary" group (the trailing
+    /// points, default the last 3 as PowerPoint does). The main pie shows the
+    /// leading slices plus one aggregate slice for the secondary group; the
+    /// secondary group is rendered as its own small pie (pieOfPie) or a vertical
+    /// bar stack (barOfPie), joined to the aggregate slice by connector lines.
+    /// </summary>
+    public void RenderOfPieChartSvg(StringBuilder sb, List<(string name, double[] values)> series,
+        string[] categories, List<string> colors, int ox, int oy, int pw, int ph, bool isBar)
+    {
+        var values = series.FirstOrDefault().values ?? [];
+        if (values.Length == 0) return;
+        var total = values.Sum();
+        if (total <= 0) return;
+
+        // Split: trailing `secCount` points go to the secondary plot.
+        int secCount = Math.Min(3, Math.Max(1, values.Length - 1));
+        int mainCount = values.Length - secCount;
+        var mainVals = values.Take(mainCount).ToList();
+        var secVals = values.Skip(mainCount).ToList();
+        var secSum = secVals.Sum();
+
+        // ── Main pie (left half of the plot) — leading slices + aggregate ──
+        var mcx = ox + pw * 0.30;
+        var mcy = oy + ph / 2.0;
+        var mr = Math.Min(pw * 0.30, ph * 0.42);
+        var startAngle = -Math.PI / 2;
+        var aggMidAngle = startAngle; // updated when we draw the aggregate slice
+
+        // Slices = leading points, then one aggregate slice for the secondary group.
+        var mainSlices = new List<double>(mainVals) { secSum };
+        for (int i = 0; i < mainSlices.Count; i++)
+        {
+            var sliceAngle = 2 * Math.PI * mainSlices[i] / total;
+            var endAngle = startAngle + sliceAngle;
+            var color = i < colors.Count ? colors[i] : DefaultColors[i % DefaultColors.Length];
+            var x1 = mcx + mr * Math.Cos(startAngle); var y1 = mcy + mr * Math.Sin(startAngle);
+            var x2 = mcx + mr * Math.Cos(endAngle); var y2 = mcy + mr * Math.Sin(endAngle);
+            var largeArc = sliceAngle > Math.PI ? 1 : 0;
+            sb.AppendLine($"        <path d=\"M {mcx:0.#},{mcy:0.#} L {x1:0.#},{y1:0.#} A {mr:0.#},{mr:0.#} 0 {largeArc},1 {x2:0.#},{y2:0.#} Z\" fill=\"{color}\" opacity=\"{FillOpacity(i)}\"/>");
+            if (i == mainSlices.Count - 1) aggMidAngle = startAngle + sliceAngle / 2;
+            startAngle = endAngle;
+        }
+
+        // Connector lines from the aggregate slice edge to the secondary plot.
+        var aggEdgeX = mcx + mr * Math.Cos(aggMidAngle);
+        var aggEdgeY = mcy + mr * Math.Sin(aggMidAngle);
+        var secX = ox + pw * 0.72;
+        var secTop = oy + ph * 0.20;
+        var secBot = oy + ph * 0.80;
+        sb.AppendLine($"        <line x1=\"{aggEdgeX:0.#}\" y1=\"{aggEdgeY:0.#}\" x2=\"{secX:0.#}\" y2=\"{secTop:0.#}\" stroke=\"#999\" stroke-width=\"1\"/>");
+        sb.AppendLine($"        <line x1=\"{aggEdgeX:0.#}\" y1=\"{aggEdgeY:0.#}\" x2=\"{secX:0.#}\" y2=\"{secBot:0.#}\" stroke=\"#999\" stroke-width=\"1\"/>");
+
+        if (secSum <= 0) return;
+
+        if (isBar)
+        {
+            // ── Secondary bar stack ──
+            var barW = pw * 0.12;
+            var barX = secX;
+            var stackH = secBot - secTop;
+            var yCursor = secBot;
+            for (int i = 0; i < secVals.Count; i++)
+            {
+                var h = stackH * secVals[i] / secSum;
+                var color = (mainCount + i) < colors.Count ? colors[mainCount + i]
+                    : DefaultColors[(mainCount + i) % DefaultColors.Length];
+                sb.AppendLine($"        <rect x=\"{barX:0.#}\" y=\"{yCursor - h:0.#}\" width=\"{barW:0.#}\" height=\"{h:0.#}\" fill=\"{color}\" opacity=\"{FillOpacity(mainCount + i)}\"/>");
+                yCursor -= h;
+            }
+        }
+        else
+        {
+            // ── Secondary small pie ──
+            var scx = secX;
+            var scy = oy + ph / 2.0;
+            var sr = Math.Min(pw * 0.18, ph * 0.28);
+            var sStart = -Math.PI / 2;
+            for (int i = 0; i < secVals.Count; i++)
+            {
+                var sliceAngle = 2 * Math.PI * secVals[i] / secSum;
+                var endAngle = sStart + sliceAngle;
+                var color = (mainCount + i) < colors.Count ? colors[mainCount + i]
+                    : DefaultColors[(mainCount + i) % DefaultColors.Length];
+                var x1 = scx + sr * Math.Cos(sStart); var y1 = scy + sr * Math.Sin(sStart);
+                var x2 = scx + sr * Math.Cos(endAngle); var y2 = scy + sr * Math.Sin(endAngle);
+                var largeArc = sliceAngle > Math.PI ? 1 : 0;
+                sb.AppendLine($"        <path d=\"M {scx:0.#},{scy:0.#} L {x1:0.#},{y1:0.#} A {sr:0.#},{sr:0.#} 0 {largeArc},1 {x2:0.#},{y2:0.#} Z\" fill=\"{color}\" opacity=\"{FillOpacity(mainCount + i)}\"/>");
+                sStart = endAngle;
+            }
+        }
+    }
+
     public void RenderAreaChartSvg(StringBuilder sb, List<(string name, double[] values)> series,
-        string[] categories, List<string> colors, int ox, int oy, int pw, int ph, bool stacked = false)
+        string[] categories, List<string> colors, int ox, int oy, int pw, int ph, bool stacked = false,
+        bool percent = false)
     {
         if (series.Count == 0) return;
         var catCount = Math.Max(categories.Length, series.Max(s => s.values.Length));
         if (catCount == 0) return;
 
+        // R16-2: percentStacked normalizes each category's stack to 100% of the
+        // column total; the axis is fixed at 0..100. Percent implies stacked.
+        if (percent) stacked = true;
+
         var cumulative = new double[series.Count, catCount];
         for (int c = 0; c < catCount; c++)
         {
+            double colTotal = 0;
+            if (percent)
+                for (int s = 0; s < series.Count; s++)
+                    colTotal += c < series[s].values.Length ? series[s].values[c] : 0;
             double runningSum = 0;
             for (int s = 0; s < series.Count; s++)
             {
                 var val = c < series[s].values.Length ? series[s].values[c] : 0;
+                if (percent) val = colTotal > 0 ? val / colTotal * 100.0 : 0;
                 runningSum += stacked ? val : 0;
                 cumulative[s, c] = stacked ? runningSum : val;
             }
@@ -1176,7 +1318,9 @@ internal partial class ChartSvgRenderer
         if (stacked) { for (int c = 0; c < catCount; c++) maxVal = Math.Max(maxVal, cumulative[series.Count - 1, c]); }
         else { maxVal = allAreaVals.Max(); minVal = Math.Min(0.0, allAreaVals.Min()); }
         if (maxVal <= minVal) maxVal = minVal + 1;
-        var (niceMax, tickInterval, tickCount) = ComputeNiceAxis(Math.Abs(maxVal) > Math.Abs(minVal) ? maxVal : -minVal);
+        var (niceMax, tickInterval, tickCount) = percent
+            ? (100.0, 20.0, 5)
+            : ComputeNiceAxis(Math.Abs(maxVal) > Math.Abs(minVal) ? maxVal : -minVal);
         // For non-stacked charts with negative values, expand the axis to cover minVal
         var niceMin = minVal < 0 ? -ComputeNiceAxis(-minVal).niceMax : 0.0;
         var axisRange = niceMax - niceMin;
@@ -1290,7 +1434,9 @@ internal partial class ChartSvgRenderer
             if (points.Count > 0)
             {
                 var serColor = colors[s % colors.Count];
-                var isFilled = radarStyle == "filled";
+                // R16-6: OOXML "standard" radar is filled+outline (with markers),
+                // same fill as "filled"; only "marker" style stays unfilled.
+                var isFilled = radarStyle is "filled" or "standard";
                 var fillAttr = isFilled ? $"fill=\"{serColor}\" fill-opacity=\"0.7\"" : "fill=\"none\"";
                 sb.AppendLine($"        <polygon points=\"{string.Join(" ", points)}\" {fillAttr} stroke=\"{serColor}\" stroke-width=\"2\"/>");
                 // Markers for marker and standard styles (standard gets small dots, marker gets circles)
@@ -1698,7 +1844,9 @@ internal partial class ChartSvgRenderer
             var label = FormatAxisValue(val);
             sb.AppendLine($"        <text x=\"{ox - 4}\" y=\"{oy + ph - (double)ph * t / AxisTickCount:0.#}\" fill=\"{AxisColor}\" font-size=\"{ValFontPx}\" text-anchor=\"end\" dominant-baseline=\"middle\">{label}</text>");
         }
-        // Secondary Y-axis labels (overlaid on left in lighter color)
+        // Secondary Y-axis labels (right side, lighter color). R16-5: these used
+        // to overlay the primary labels on the left (x=ox+2); placing them at the
+        // plot's right edge matches PowerPoint's right-hand secondary axis.
         if (hasSecondary)
         {
             var secFontPx = Math.Max(ValFontPx - 1, CatFontPx);
@@ -1706,7 +1854,7 @@ internal partial class ChartSvgRenderer
             {
                 var val = secNiceMax * t / AxisTickCount;
                 var label = FormatAxisValue(val);
-                sb.AppendLine($"        <text x=\"{ox + 2}\" y=\"{oy + ph - (double)ph * t / AxisTickCount:0.#}\" fill=\"{SecondaryAxisColor}\" font-size=\"{secFontPx}\" text-anchor=\"start\" dominant-baseline=\"middle\">{label}</text>");
+                sb.AppendLine($"        <text x=\"{ox + pw + 4}\" y=\"{oy + ph - (double)ph * t / AxisTickCount:0.#}\" fill=\"{SecondaryAxisColor}\" font-size=\"{secFontPx}\" text-anchor=\"start\" dominant-baseline=\"middle\">{label}</text>");
             }
         }
     }
@@ -1811,6 +1959,26 @@ internal partial class ChartSvgRenderer
                 sb.AppendLine($"        <line x1=\"{ccx:0.#}\" y1=\"{yHigh:0.#}\" x2=\"{ccx:0.#}\" y2=\"{yLow:0.#}\" stroke=\"{color}\" stroke-width=\"1.5\"/>");
                 var bodyTop = Math.Min(yOpen, yClose); var bodyH = Math.Max(Math.Abs(yOpen - yClose), 1);
                 sb.AppendLine($"        <rect x=\"{ccx - barW / 2:0.#}\" y=\"{bodyTop:0.#}\" width=\"{barW:0.#}\" height=\"{bodyH:0.#}\" fill=\"{color}\" opacity=\"0.85\"/>");
+            }
+        }
+        else if (series.Count == 3)
+        {
+            // R16-4: 3-series stock = hi-lo-close. Render a vertical wick from
+            // high to low plus a right-side close tick at each category, instead
+            // of falling back to three plain line series.
+            var wickColor = downColor == "#000000" ? "#000000" : downColor;
+            for (int c = 0; c < catCount; c++)
+            {
+                var high = c < series[0].values.Length ? series[0].values[c] : 0;
+                var low = c < series[1].values.Length ? series[1].values[c] : 0;
+                var close = c < series[2].values.Length ? series[2].values[c] : 0;
+                var ccx = ox + c * groupW + groupW / 2;
+                var yHigh = oy + ph - ((high - minVal) / range) * ph;
+                var yLow = oy + ph - ((low - minVal) / range) * ph;
+                var yClose = oy + ph - ((close - minVal) / range) * ph;
+                var tickW = groupW * 0.25;
+                sb.AppendLine($"        <line x1=\"{ccx:0.#}\" y1=\"{yHigh:0.#}\" x2=\"{ccx:0.#}\" y2=\"{yLow:0.#}\" stroke=\"{wickColor}\" stroke-width=\"1.5\"/>");
+                sb.AppendLine($"        <line x1=\"{ccx:0.#}\" y1=\"{yClose:0.#}\" x2=\"{ccx + tickW:0.#}\" y2=\"{yClose:0.#}\" stroke=\"{wickColor}\" stroke-width=\"1.5\"/>");
             }
         }
         else { RenderLineChartSvg(sb, series, categories, colors, ox, oy, pw, ph); return; }
@@ -2738,7 +2906,16 @@ internal partial class ChartSvgRenderer
         if (TryRenderCxSpecificType(sb, info, marginLeft, marginTop, plotW, plotH))
             return;
 
-        if (chartType.Contains("pie") || chartType.Contains("doughnut"))
+        if (chartType == "pieOfPie" || chartType == "barOfPie")
+        {
+            // R16-1: pieOfPie / barOfPie render a main pie PLUS a secondary plot
+            // (a small pie or a bar cluster) for the trailing data points, joined
+            // by connector lines. Must branch before the generic Contains("pie")
+            // test, which would otherwise render a plain single pie.
+            RenderOfPieChartSvg(sb, info.Series, info.Categories, info.Colors,
+                marginLeft, marginTop, plotW, plotH, chartType == "barOfPie");
+        }
+        else if (chartType.Contains("pie") || chartType.Contains("doughnut"))
         {
             if (info.Is3D)
                 RenderPie3DSvg(sb, info.Series, info.Categories, info.Colors, svgW, svgH,
@@ -2755,7 +2932,7 @@ internal partial class ChartSvgRenderer
                 RenderArea3DSvg(sb, info.Series, info.Categories, info.Colors, marginLeft, marginTop, areaW, plotH,
                     info.IsStacked, info.RotateX, info.RotateY);
             else
-                RenderAreaChartSvg(sb, info.Series, info.Categories, info.Colors, marginLeft, marginTop, areaW, plotH, info.IsStacked);
+                RenderAreaChartSvg(sb, info.Series, info.Categories, info.Colors, marginLeft, marginTop, areaW, plotH, info.IsStacked, info.IsPercent);
         }
         else if (chartType == "combo")
         {
@@ -2796,7 +2973,8 @@ internal partial class ChartSvgRenderer
                     info.ReferenceLines, info.Smooth, info.LineDashes, info.LineWidths,
                     info.DropLineColor, info.DropLineWidth, info.DropLineDash,
                     info.HighLowLineColor, info.HighLowLineWidth,
-                    info.Trendlines, info.ErrorBars, info.ScatterMarkersOnly);
+                    info.Trendlines, info.ErrorBars, info.ScatterMarkersOnly,
+                    info.IsStacked, info.IsPercent);
         }
         else
         {
