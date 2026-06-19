@@ -882,6 +882,7 @@ public partial class WordHandler
         for(var i=0;i<pgs.length;i++) if(pgs[i].contains(a)){pmap.push(a.id+'='+(i+1));break;}
       });
       applyPageFilter();
+      flushScreenshotPage();
       document.title='PAGES:'+pgs.length+(pmap.length?'|MAP:'+pmap.join(','):'');
     }
     else{setTimeout(positionFootnotes,0);setTimeout(wrapFloats,0);setTimeout(applyLineNumbers,0);setTimeout(applyPageFilter,0);setTimeout(function(){scalePages(false);},0);}
@@ -1023,6 +1024,24 @@ public partial class WordHandler
       if(!rSet.has(i+1))p.style.display='none';
     });
   }
+  // Single-page screenshot: clip the one visible page to its page box and drop
+  // the chrome (gray body padding, drop-shadow, rounded corners, wrapper margin)
+  // so the capture is flush, for ANY page (not just page 1) — matching pptx.
+  // The screenshot viewport is sized to the page's native pixels.
+  function flushScreenshotPage(){
+    if(!SCREENSHOT)return;
+    // offsetParent is null when the page OR its wrapper is display:none, so this
+    // counts only genuinely-visible pages (page-1 path hides wrappers; page-N
+    // path hides .page elements via applyPageFilter).
+    var vis=Array.prototype.filter.call(document.querySelectorAll('.page'),function(p){return p.offsetParent!==null;});
+    if(vis.length!==1)return;
+    var page=vis[0];
+    page.style.height=page.style.minHeight;page.style.overflow='hidden';
+    page.style.boxShadow='none';page.style.borderRadius='0';
+    document.body.style.padding='0';
+    var w=page.closest('.page-wrapper');if(w)w.style.margin='0';
+    document.querySelectorAll('.page-wrapper').forEach(function(pw){if(pw!==w)pw.style.display='none';});
+  }
   function _loadKatexLazy(cb){
     // Watch mode: doc may start formula-free (KaTeX tags omitted), then
     // gain a formula via SSE patch. Inject CSS + JS on demand; on load,
@@ -1108,15 +1127,17 @@ public partial class WordHandler
         // Pass requested pages to JS for post-pagination filtering
         if (requestedPages != null && requestedPages.Count > 0)
             sb.AppendLine($"  window._requestedPages=[{string.Join(",", requestedPages)}];");
-        sb.AppendLine(@"  var SCREENSHOT=location.hash.indexOf('screenshot')>=0;
+        sb.AppendLine(@"  var SCREENSHOT=location.hash.indexOf('screenshot')>=0||navigator.webdriver||/HeadlessChrome/.test(navigator.userAgent);
   window._wpSync=SCREENSHOT;
   if(SCREENSHOT){
     var rp=window._requestedPages;
     if(rp&&rp.length===1&&rp[0]===1){
-      var first=document.querySelector('.page');
-      if(first){first.style.height=first.style.minHeight;first.style.overflow='hidden';}
+      // Page 1 is the first .page before pagination — flush it directly, skipping
+      // the full paginate pass. Other single pages go through paginate and flush
+      // at its sync completion. flushScreenshotPage clips + drops the chrome.
       document.querySelectorAll('.page-wrapper:not(:first-of-type)').forEach(function(w){w.style.display='none';});
       positionFootnotes();wrapFloats();applyLineNumbers();
+      flushScreenshotPage();
     }else{paginate();}
   }else{setTimeout(paginate,100);}");
         sb.AppendLine("}");
@@ -1145,6 +1166,21 @@ public partial class WordHandler
         var result = GetPageLayoutFor(sectPr);
         if (_ctx != null) _ctx.CachedPageLayout = result;
         return result;
+    }
+
+    /// <summary>
+    /// First-section page size in CSS pixels at 96 DPI (page pt × 96/72) — the
+    /// size a page renders at in the HTML preview. The screenshot path sizes a
+    /// single-page viewport to this so the PNG is the page, with no letterbox
+    /// padding. Mirrors PowerPointHandler.GetSlideNativePixels. Falls back to
+    /// US-Letter (816×1056).
+    /// </summary>
+    internal (int width, int height) GetPageNativePixels()
+    {
+        var pg = GetPageLayout();
+        int w = (int)Math.Round(pg.WidthPt * 96.0 / 72.0);
+        int h = (int)Math.Round(pg.HeightPt * 96.0 / 72.0);
+        return w > 0 && h > 0 ? (w, h) : (816, 1056);
     }
 
     // OpenXML typed-value accessors throw on malformed raw attrs

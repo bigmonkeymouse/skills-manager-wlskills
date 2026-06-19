@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "matlab": {
+      "type": "stdio",
+      "command": "/path/to/matlab-mcp-server",
+      "args": [
+        "--matlab-root",
+        "/path/to/MATLAB/R2025b",
+        "--matlab-display-mode",
+        "desktop"
+      ]
+    }
+  }
+}

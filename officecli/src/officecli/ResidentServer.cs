@@ -1191,6 +1191,9 @@ public class ResidentServer : IDisposable
             string? html = null;
             byte[]? directPng = null;
             var gridCols = req.GetIntArg("grid") ?? 0;
+            var renderMode = (req.GetArgOrNull("render") ?? "auto").ToLowerInvariant();
+            var sw = req.GetIntArg("screenshot-width") ?? 1600;
+            var sh = req.GetIntArg("screenshot-height") ?? 1200;
             // CONSISTENCY(screenshot-default-first-page): mirror CommandBuilder.View.cs —
             // screenshot mode defaults to a single bounded visual unit (pptx → slide 1,
             // docx → page 1, xlsx → active sheet via CSS). Without this, multi-page docs
@@ -1202,20 +1205,66 @@ public class ResidentServer : IDisposable
                 if (string.IsNullOrEmpty(effectiveFilter) && start is null && end is null && gridCols == 0)
                     effectiveFilter = "1";
                 var (pStart, pEnd) = ResolvePptHtmlPage(effectiveFilter, start, end, pptShotHandler);
-                html = pptShotHandler.ViewAsHtml(pStart, pEnd, gridCols, req.GetIntArg("screenshot-width") ?? 1600);
+
+                // Native-first (mirrors docx --render auto/native/html): export the
+                // slide(s) to PNG with the OS-native engine on Windows; grid is HTML-only.
+                // Default export size is the slide's 96-DPI native pixels; a custom
+                // --screenshot-width overrides it (aspect-matched height).
+                var (nativeW, nativeH) = pptShotHandler.GetSlideNativePixels();
+                int exportW = nativeW, exportH = nativeH;
+                if (!(sw == 1600 && sh == 1200))
+                {
+                    exportW = sw;
+                    exportH = sh == 1200 ? Math.Max(1, (int)Math.Round(sw * (double)nativeH / nativeW)) : sh;
+                }
+                if (renderMode != "html" && gridCols == 0 && OperatingSystem.IsWindows())
+                {
+                    var ps = pStart ?? 1; var pe = pEnd ?? ps;
+                    // A read-only handler holds only read access with FileShare.ReadWrite,
+                    // so the app can open the file for read concurrently — no dispose
+                    // needed. An editable handler holds a write handle that blocks the
+                    // app, so release it first (Dispose flushes pending edits) and reopen.
+                    if (_editable) _handler.Dispose();
+                    try { directPng = OfficeCli.Core.PowerPointPngBackend.Render(_filePath, ps, pe, exportW, exportH); } catch { directPng = null; }
+                    if (_editable)
+                    {
+                        _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
+                        pptShotHandler = (OfficeCli.Handlers.PowerPointHandler)_handler;
+                    }
+                }
+                if (renderMode == "native" && directPng == null)
+                {
+                    Console.Error.WriteLine("--render native requires Windows with Microsoft PowerPoint installed.");
+                    return;
+                }
+                if (directPng == null)
+                {
+                    html = pptShotHandler.ViewAsHtml(pStart, pEnd, gridCols, sw);
+                    // Single slide: size the viewport to the slide's 96-DPI native
+                    // pixels so the PNG is the slide, padding-free.
+                    if (pStart == pEnd && gridCols == 0)
+                    {
+                        if (sw == 1600 && sh == 1200) { sw = nativeW; sh = nativeH; }
+                        else if (sh == 1200) sh = Math.Max(1, (int)Math.Round(sw * (double)nativeH / nativeW));
+                    }
+                }
             }
             else if (_handler is OfficeCli.Handlers.ExcelHandler excelShotHandler)
                 html = excelShotHandler.ViewAsHtml();
             else if (_handler is OfficeCli.Handlers.WordHandler wordShotHandler)
             {
                 var effectiveFilter = string.IsNullOrEmpty(pageFilter) ? "1" : pageFilter;
-                var renderMode = (req.GetArgOrNull("render") ?? "auto").ToLowerInvariant();
                 if (renderMode != "html" && OperatingSystem.IsWindows())
                 {
-                    _handler.Dispose();
+                    // See the pptx branch: only an editable handler must be released
+                    // (its write handle blocks Word); a read-only handler coexists.
+                    if (_editable) _handler.Dispose();
                     try { directPng = OfficeCli.Core.WordPdfBackend.Render(_filePath, effectiveFilter); } catch { directPng = null; }
-                    _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
-                    wordShotHandler = (OfficeCli.Handlers.WordHandler)_handler;
+                    if (_editable)
+                    {
+                        _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
+                        wordShotHandler = (OfficeCli.Handlers.WordHandler)_handler;
+                    }
                 }
                 if (renderMode == "native" && directPng == null)
                 {
@@ -1229,8 +1278,6 @@ public class ResidentServer : IDisposable
                 Console.Error.WriteLine("Screenshot mode is only supported for .pptx, .xlsx, and .docx files.");
                 return;
             }
-            var sw = req.GetIntArg("screenshot-width") ?? 1600;
-            var sh = req.GetIntArg("screenshot-height") ?? 1200;
             var pngPath = req.GetArgOrNull("out") ?? Path.Combine(Path.GetTempPath(), $"officecli_screenshot_{Path.GetFileNameWithoutExtension(_filePath)}_{DateTime.Now:HHmmss}_{Guid.NewGuid():N}.png");
             if (directPng != null)
             {

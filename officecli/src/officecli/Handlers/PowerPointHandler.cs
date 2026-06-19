@@ -118,6 +118,22 @@ public partial class PowerPointHandler : IDocumentHandler
         return (sldSz?.Cx?.Value ?? SlideSizeDefaults.Widescreen16x9Cx, sldSz?.Cy?.Value ?? SlideSizeDefaults.Widescreen16x9Cy);
     }
 
+    /// <summary>
+    /// Slide size in CSS pixels at 96 DPI — the size a single slide actually
+    /// renders at in the HTML preview (EMU ÷ 9525, the canonical EmuConverter
+    /// ratio). The screenshot path sizes a single-slide viewport to this so the
+    /// PNG is the slide pixel-for-pixel, with no letterbox padding and no scaling.
+    /// Physical-derived: a 13.33" and a 10" 16:9 differ in resolution because they
+    /// are genuinely different-sized slides. Falls back to 1280×720 (16:9).
+    /// </summary>
+    internal (int width, int height) GetSlideNativePixels()
+    {
+        var (w, h) = GetSlideSize();
+        if (w <= 0 || h <= 0) return (1280, 720);
+        return ((int)Math.Round(w / (double)EmuConverter.EmuPerPx),
+                (int)Math.Round(h / (double)EmuConverter.EmuPerPx));
+    }
+
     // ==================== Raw Layer ====================
 
     // CONSISTENCY(zip-uri-lookup): see ExcelHandler.cs / RawXmlHelper —

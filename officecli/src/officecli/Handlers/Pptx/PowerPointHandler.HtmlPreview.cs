@@ -141,8 +141,21 @@ public partial class PowerPointHandler
             sb.AppendLine($".slide{{transform:scale({scale:0.######}) !important;transform-origin:top left !important;position:absolute !important;top:0 !important;left:0 !important}}");
             sb.AppendLine("</style>");
         }
+        else if (startSlide.HasValue && endSlide.HasValue && startSlide.Value == endSlide.Value)
+        {
+            // Single-slide screenshot: drop the .main page padding/gap so the slide
+            // renders flush to the captured viewport (which the screenshot path sizes
+            // to the slide's native pixels). Scoped to headless so interactive
+            // `view html` keeps its breathing room.
+            sb.AppendLine("<style>html.headless .main{padding:0 !important;gap:0 !important}html.headless .slide{box-shadow:none !important}</style>");
+        }
         // Auto-hide sidebar in headless/automated browsers (screenshot, Playwright, etc.)
-        sb.AppendLine("<script>if(navigator.webdriver||/HeadlessChrome/.test(navigator.userAgent))document.documentElement.classList.add('headless')</script>");
+        // Screenshot/automated render → flush mode. Lead with the explicit
+        // '#screenshot' fragment that HtmlScreenshot appends to every capture URL
+        // (deterministic, we control it); fall back to webdriver/UA sniffing so
+        // external headless tools (html-screenshot.py, visual-regression) flush too.
+        // Same trigger as the docx preview's SCREENSHOT flag.
+        sb.AppendLine("<script>if(location.hash.indexOf('screenshot')>=0||navigator.webdriver||/HeadlessChrome/.test(navigator.userAgent))document.documentElement.classList.add('headless')</script>");
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
         sb.AppendLine("<div class=\"toggle-zone\"></div><button class=\"sidebar-toggle\" onclick=\"toggleSidebar()\">\u2630</button>");

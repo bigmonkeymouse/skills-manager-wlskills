@@ -52,6 +52,7 @@
             font_body: "Body",
             font_body_size: "Body baseline size",
             font_body_size_hint: "All type sizes derive from this body baseline.",
+            body_size_hint_canvas: "This canvas suggests ~{lo}–{hi}px (scales with canvas height).",
             custom_typography: "Custom typography",
             custom_typography_placeholder: "Type your font plan, e.g. Heading: Georgia + KaiTi; Body: Microsoft YaHei + Arial…",
             role_background: "bg",
@@ -64,6 +65,8 @@
             latin: "Latin",
             sample_cjk: "数字化转型战略",
             sample_latin: "Digital Transformation",
+            style_preview_label: "Overall impression (color + typography)",
+            style_preview_body: "· rough feel only, not the actual slide layout",
             mode_continuous_desc: "Generate the whole deck in one pass.",
             mode_split_desc: "Stop after the spec; resume SVG generation in a fresh window.",
             refine_off_desc: "Spec is written in one go; the pipeline auto-proceeds.",
@@ -115,6 +118,7 @@
             font_body: "正文",
             font_body_size: "正文基准字号",
             font_body_size_hint: "所有字号按这个正文基准推导。",
+            body_size_hint_canvas: "当前画布建议 ~{lo}–{hi}px（随画布高度缩放）。",
             custom_typography: "自定义字体方案",
             custom_typography_placeholder: "输入字体方案，如：标题用楷体；正文用微软雅黑…",
             role_background: "背景",
@@ -127,6 +131,8 @@
             latin: "西文",
             sample_cjk: "数字化转型战略",
             sample_latin: "Digital Transformation",
+            style_preview_label: "整体形象（配色 + 字体）",
+            style_preview_body: "· 仅大致形象，非实际版式",
             mode_continuous_desc: "一次性连续生成整份演示文稿。",
             mode_split_desc: "写完设计规范后停止，另开窗口继续生成页面。",
             refine_off_desc: "设计规范一次写完，流程自动继续。",
@@ -445,6 +451,19 @@
         return spec.candidates || spec.options || [];
     }
 
+    function usesCustomImagePlanValue(value) {
+        var ids = (CAT.image_usage || []).map(function (item) { return item.id; });
+        return value && ids.indexOf(value) === -1;
+    }
+
+    function customImagePlanHasAiSignal() {
+        return imageStrategyCandidates().length > 0 || !!recId("image_ai_path");
+    }
+
+    function needsGeneratedImagesForUsage(value) {
+        return value === "ai" || (usesCustomImagePlanValue(value) && customImagePlanHasAiSignal());
+    }
+
     function imageStrategySelectedIndex() {
         var spec = imageStrategySpec();
         var idx = spec.selected || 0;
@@ -455,7 +474,8 @@
     function renderCanvas(host) {
         var sec = section(1, "sec_canvas");
         enumField(sec, CAT.canvas, recOrFirst("canvas", CAT.canvas),
-            function () { return STATE.canvas; }, function (v) { STATE.canvas = v; }, { allowCustom: true });
+            function () { return STATE.canvas; },
+            function (v) { STATE.canvas = v; refreshBodySizeHint(); }, { allowCustom: true });
         host.appendChild(sec);
     }
 
@@ -495,6 +515,30 @@
         "body_text"
     ];
 
+    function normHex(val) {
+        var v = (val || "").trim();
+        if (!/^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(v)) return null;
+        return v.charAt(0) === "#" ? v : "#" + v;
+    }
+    function hexOr(val, fallback) {
+        return normHex(val) || fallback;
+    }
+    // Replaced when the combined color+typography preview mounts; the color and
+    // typography sections call it after every change so the preview stays live.
+    var refreshStylePreview = function () {};
+    // Replaced when the typography section mounts; the canvas section calls it so
+    // the body-size hint tracks the chosen canvas height.
+    var refreshBodySizeHint = function () {};
+
+    // Canvas height (viewBox user units) parsed from a catalog `dim` like
+    // "1242×1660" or from a custom canvas string containing WxH; null if unknown.
+    function canvasHeight(canvasVal) {
+        var dim = null;
+        (CAT.canvas || []).forEach(function (o) { if (o.id === canvasVal) dim = o.dim; });
+        var m = String(dim || canvasVal || "").match(/(\d{2,5})\s*[×xX*]\s*(\d{2,5})/);
+        return m ? parseInt(m[2], 10) : null;
+    }
+
     function renderColor(host) {
         var cands = (REC.color && REC.color.candidates) || [];
         var sec = section(5, "sec_color");
@@ -504,11 +548,6 @@
         var cardSwatchRefs = [];   // idx -> {role: swatchEl}, for live override feedback
         var selectedIdx = -1;
 
-        function normHex(val) {
-            var v = (val || "").trim();
-            if (!/^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(v)) return null;
-            return v.charAt(0) === "#" ? v : "#" + v;
-        }
         function paintSwatch(elem, val) {
             var n = normHex(val);
             elem.style.background = n || "transparent";
@@ -526,6 +565,7 @@
             STATE.color = { name: c.name || "", palette: Object.assign({}, normPalette(c)) };
             grid.querySelectorAll(".color-card").forEach(function (card, i) { card.classList.toggle("selected", i === idx); });
             applyHexInputs(STATE.color.palette);
+            refreshStylePreview();
         }
 
         cands.forEach(function (c, idx) {
@@ -571,6 +611,7 @@
                 if (n && selectedIdx >= 0 && cardSwatchRefs[selectedIdx] && cardSwatchRefs[selectedIdx][role]) {
                     cardSwatchRefs[selectedIdx][role].style.background = n;
                 }
+                refreshStylePreview();
             });
             hexInputs[role] = inp; hexSwatches[role] = sw;
             line.appendChild(sw); line.appendChild(inp);
@@ -593,11 +634,22 @@
         host.appendChild(sec);
     }
 
+    function previewFontStack(primary, fallback) {
+        if (!primary) return fallback || "";
+        if (!fallback) return primary;
+        return primary + ", " + fallback;
+    }
+
     function fontSample(box, slot, css) {
         var line = el("div", "font-sample-line");
         var cjk = el("span", "fs-cjk", slot.sample_cjk || t("sample_cjk"));
         var lat = el("span", "fs-latin", slot.sample_latin || t("sample_latin"));
-        if (css) { cjk.style.fontFamily = css; lat.style.fontFamily = css; }
+        var cjkStack = previewFontStack(slot.cjk, css);
+        var latinStack = previewFontStack(slot.latin, css);
+        if (cjkStack) cjk.style.fontFamily = cjkStack;
+        if (latinStack) lat.style.fontFamily = latinStack;
+        if (cjkStack) cjk.title = cjkStack;
+        if (latinStack) lat.title = latinStack;
         line.appendChild(cjk); line.appendChild(lat); box.appendChild(line);
     }
 
@@ -622,6 +674,7 @@
             if (sizeInput) sizeInput.value = STATE.typography.body_size || "";
             customInput.style.display = "none";
             grid.querySelectorAll(".font-card").forEach(function (card, i) { card.classList.toggle("selected", i === idx); });
+            refreshStylePreview();
         }
 
         function selectCustomTypography() {
@@ -636,6 +689,7 @@
             customCard.classList.add("selected");
             customInput.style.display = "block";
             customInput.focus();
+            refreshStylePreview();
         }
 
         cands.forEach(function (c, idx) {
@@ -663,6 +717,7 @@
         customInput.addEventListener("input", function () {
             if (!STATE.typography || STATE.typography.name !== "custom") selectCustomTypography();
             STATE.typography.custom = customInput.value;
+            refreshStylePreview();
         });
         sec.appendChild(customInput);
 
@@ -679,9 +734,25 @@
         sizeInput.addEventListener("input", function () {
             if (!STATE.typography) STATE.typography = { name: "", heading: {}, body: {} };
             STATE.typography.body_size = sizeInput.value;
+            refreshStylePreview();
         });
         sizeRow.appendChild(sizeInput);
-        sizeRow.appendChild(el("div", "toggle-desc", t("font_body_size_hint")));
+        var sizeHint = el("div", "toggle-desc");
+        sizeRow.appendChild(sizeHint);
+        // Suggest a canvas-appropriate baseline (≈2.5–3.3% of canvas height) so
+        // a 16:9 default is not silently kept on a tall canvas. Hint only — the
+        // user's value is never overwritten; downstream §g re-derives if ignored.
+        refreshBodySizeHint = function () {
+            var h = canvasHeight(STATE.canvas);
+            var txt = t("font_body_size_hint");
+            if (h) {
+                txt += " " + t("body_size_hint_canvas")
+                    .replace("{lo}", Math.round(h * 0.025))
+                    .replace("{hi}", Math.round(h * 0.033));
+            }
+            sizeHint.textContent = txt;
+        };
+        refreshBodySizeHint();
         sizeField.appendChild(sizeRow);
         sec.appendChild(sizeField);
 
@@ -702,6 +773,86 @@
         }
     }
 
+    // Combined color + typography preview — not a ninth confirmation, just a
+    // live "overall impression" of the two style choices made above. Kept
+    // deliberately abstract (a style chip, not a slide layout); page layout
+    // preview is the live-preview server's job (Step 6).
+    function renderStylePreview(host) {
+        var wrap = el("div", "style-preview");
+        var label = el("div", "style-preview-label");
+        label.appendChild(el("span", "spl-title", t("style_preview_label")));
+        // The "rough feel, not a slide layout" caveat sits in the label in the
+        // UI font — never rendered in the candidate's body font, so it cannot
+        // pose as sample content.
+        label.appendChild(el("span", "spl-note", t("style_preview_body")));
+        wrap.appendChild(label);
+        var card = el("div", "style-preview-card");
+        var textcol = el("div", "sp-textcol");
+        var title = el("div", "sp-title");
+        var titleCjk = el("span", "sp-title-cjk");
+        var titleLat = el("span", "sp-title-lat");
+        title.appendChild(titleCjk); title.appendChild(titleLat);
+        var bodyRow = el("div", "sp-body");
+        var accentBar = el("span", "sp-accent-bar");
+        var bodyWrap = el("div", "sp-body-wrap");
+        var bodyCjk = el("span", "sp-body-cjk");
+        var bodyLat = el("span", "sp-body-lat");
+        bodyWrap.appendChild(bodyCjk); bodyWrap.appendChild(bodyLat);
+        bodyRow.appendChild(accentBar); bodyRow.appendChild(bodyWrap);
+        textcol.appendChild(title); textcol.appendChild(bodyRow);
+        var chip = el("div", "sp-chip");
+        var chipDot = el("span", "sp-chip-dot");
+        var chipLabel = el("span", "sp-chip-label");
+        chip.appendChild(chipDot); chip.appendChild(chipLabel);
+        card.appendChild(textcol); card.appendChild(chip);
+        wrap.appendChild(card);
+        host.appendChild(wrap);
+        // Pin the strip just under the sticky topbar so it stays visible while
+        // the user scrolls through the color / icon / typography sections.
+        var topbar = document.getElementById("topbar");
+        if (topbar) wrap.style.top = topbar.offsetHeight + "px";
+
+        function paint() {
+            var pal = (STATE.color && STATE.color.palette) || {};
+            var typ = STATE.typography || {};
+            var head = typ.heading || {}, body = typ.body || {};
+            var bg = hexOr(pal.background, "#ffffff");
+            var sbg = hexOr(pal.secondary_bg, bg);
+            var pri = hexOr(pal.primary, "#1a3a6b");
+            var acc = hexOr(pal.accent, pri);
+            var sacc = hexOr(pal.secondary_accent, acc);
+            var txt = hexOr(pal.body_text, "#1d2430");
+            var bodyPx = Math.max(12, Math.min(26, parseInt(typ.body_size, 10) || 18));
+            var headStack = previewFontStack(head.cjk, head.css);
+            var headLatStack = previewFontStack(head.latin, head.css);
+            var bodyStack = previewFontStack(body.cjk, body.css);
+            var bodyLatStack = previewFontStack(body.latin, body.css);
+
+            card.style.background = bg;
+            titleCjk.textContent = head.sample_cjk || t("sample_cjk");
+            titleLat.textContent = head.sample_latin || t("sample_latin");
+            title.style.color = pri;
+            title.style.fontSize = Math.round(bodyPx * 1.7) + "px";
+            titleCjk.style.fontFamily = headStack || "";
+            titleLat.style.fontFamily = headLatStack || "";
+            // CJK and Latin previewed with their own stacks (mirrors the title
+            // and the per-card font samples) so each script's font is visible.
+            bodyCjk.textContent = body.sample_cjk || t("sample_cjk");
+            bodyLat.textContent = body.sample_latin || t("sample_latin");
+            bodyWrap.style.color = txt;
+            bodyWrap.style.fontSize = bodyPx + "px";
+            bodyCjk.style.fontFamily = bodyStack || "";
+            bodyLat.style.fontFamily = bodyLatStack || "";
+            accentBar.style.background = acc;
+            chip.style.background = sbg;
+            chipDot.style.background = sacc;
+            chipLabel.textContent = t("role_secondary_bg");
+            chipLabel.style.color = txt;
+        }
+        refreshStylePreview = paint;
+        paint();
+    }
+
     function renderImages(host) {
         var sec = section(8, "sec_images");
         var sub = el("div", "subfield");
@@ -711,11 +862,10 @@
         var strategyGrid = el("div", "font-grid");
         var strategyCands = imageStrategyCandidates();
         function usesCustomImagePlan() {
-            var ids = (CAT.image_usage || []).map(function (item) { return item.id; });
-            return STATE.image_usage && ids.indexOf(STATE.image_usage) === -1;
+            return usesCustomImagePlanValue(STATE.image_usage);
         }
         function needsGeneratedImages() {
-            return STATE.image_usage === "ai" || usesCustomImagePlan();
+            return needsGeneratedImagesForUsage(STATE.image_usage);
         }
         function refreshAiControls() {
             var needsAiPath = needsGeneratedImages();
@@ -806,13 +956,24 @@
     function renderAll() {
         var host = document.getElementById("sections");
         host.innerHTML = "";
+        // Detach the previous preview's repaint closure before the sections
+        // re-render: color/typography auto-select would otherwise call it and
+        // write to now-detached nodes until renderStylePreview remounts it.
+        refreshStylePreview = function () {};
+        refreshBodySizeHint = function () {};
         renderCanvas(host);
         renderPages(host);
         renderAudience(host);
         renderStyle(host);
-        renderColor(host);
-        renderIcons(host);
-        renderTypography(host);
+        // Group the preview with the three sections it reflects so its sticky
+        // scope ends when typography scrolls past — it does not linger over the
+        // image / mode / refine sections below.
+        var styleGroup = el("div", "style-group");
+        renderStylePreview(styleGroup);
+        renderColor(styleGroup);
+        renderIcons(styleGroup);
+        renderTypography(styleGroup);
+        host.appendChild(styleGroup);
         renderImages(host);
         renderMode(host);
         renderRefine(host);
@@ -871,8 +1032,7 @@
     function confirm() {
         var btn = document.getElementById("btn-confirm");
         var payload = Object.assign({}, STATE);
-        var imageUsageIds = (CAT.image_usage || []).map(function (item) { return item.id; });
-        var customImagePlan = payload.image_usage && imageUsageIds.indexOf(payload.image_usage) === -1;
+        var customImagePlan = usesCustomImagePlanValue(payload.image_usage);
         if (payload.image_usage === "custom" || (customImagePlan && !String(payload.image_usage).trim())) {
             document.getElementById("confirm-status").textContent = t("image_usage_custom_required");
             var customImageInput = document.querySelector(".image-usage-custom-input");
@@ -880,7 +1040,7 @@
             return;
         }
         if (customImagePlan) payload.image_usage = String(payload.image_usage).trim();
-        if (payload.image_usage !== "ai" && !customImagePlan) {
+        if (!needsGeneratedImagesForUsage(payload.image_usage)) {
             delete payload.image_ai_path;
             delete payload.image_strategy;
         }

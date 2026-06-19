@@ -563,10 +563,24 @@ public static partial class WordBatchEmitter
         };
         if (!string.IsNullOrEmpty(pNode.Text))
             eqProps["formula"] = pNode.Text!;
+        // BUG-DUMP-EQVERBATIM (display): forward the verbatim <m:oMath> so the
+        // rebuilt equation keeps its math-run rPr (Cambria Math, sizes) instead
+        // of being reparsed from the lossy LaTeX string.
+        if (pNode.Format.TryGetValue("xml", out var eqXml)
+            && eqXml != null && eqXml.ToString() is { Length: > 0 } eqXmlS
+            && eqXmlS.Contains("oMath", StringComparison.Ordinal))
+            eqProps["xml"] = eqXmlS;
         // BUG-DUMP19-02: forward block-equation alignment.
         if (pNode.Format.TryGetValue("align", out var eqAlign)
             && eqAlign != null && !string.IsNullOrEmpty(eqAlign.ToString()))
             eqProps["align"] = eqAlign.ToString()!;
+        // BUG-DUMP-EQDISPLAY-PPR: forward the wrapper paragraph's spacing so the
+        // rebuilt display-equation paragraph keeps its line height (e.g. 1.5x);
+        // dropping it collapsed the equation line and compressed the page.
+        foreach (var sk in new[] { "lineSpacing", "lineRule", "spaceBefore", "spaceAfter" })
+            if (pNode.Format.TryGetValue(sk, out var sv)
+                && sv != null && sv.ToString() is { Length: > 0 } svs)
+                eqProps[sk] = svs;
         items.Add(new BatchItem
         {
             Command = "add",
@@ -2693,6 +2707,27 @@ public static partial class WordBatchEmitter
         {
             var spec = ctx.ChartSpecs[ctx.ChartCursor.Index];
             ctx.ChartCursor.Index++;
+            // VERBATIM-FIRST: carry the chart part + its sidecars byte-for-byte
+            // instead of rebuilding from semantic props. The typed BuildChartProps
+            // path below de-references the chart data (numRef→numLit, drops strRef
+            // category labels / ptCount data points / dLbls / externalData) and
+            // renders a visibly compressed chart. The verbatim <w:drawing> also
+            // preserves the host wrapper (wp:extent / effectExtent / anchor) for
+            // free, so the R38-1 / anchor width fix-ups below are unnecessary on
+            // this path. Falls through to the typed path when the carrier can't
+            // resolve every referenced part (return null) — same conservative
+            // fallback as the other inlined-parts carriers.
+            if (word.GetChartVerbatimEmitData(run.Path) is { } chartVerbatim)
+            {
+                items.Add(new BatchItem
+                {
+                    Command = "add",
+                    Parent = paraTargetPath,
+                    Type = "chartpart",
+                    Props = PackInlinedPartsProps(chartVerbatim),
+                });
+                return true;
+            }
             var chartProps = BuildChartProps(spec);
             // BUG-DUMP-R38-1: the chart node's width/height come from
             // WordHandler.Query formatted as 1-decimal CENTIMETRES (cx/cy /

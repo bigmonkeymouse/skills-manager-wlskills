@@ -1,0 +1,11 @@
+{
+  "matlab": {
+    "command": "/path/to/matlab-mcp-server",
+    "args": [
+      "--matlab-root",
+      "/path/to/MATLAB",
+      "--matlab-display-mode",
+      "desktop"
+    ]
+  }
+}
