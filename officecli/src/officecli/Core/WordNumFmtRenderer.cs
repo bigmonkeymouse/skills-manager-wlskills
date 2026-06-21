@@ -15,8 +15,14 @@ public static class WordNumFmtRenderer
 {
     public static string Render(int n, string? numFmt)
     {
-        if (n < 1) n = 1;
-        switch ((numFmt ?? "decimal").ToLowerInvariant())
+        var fmt = (numFmt ?? "decimal").ToLowerInvariant();
+        // Plain decimal can represent 0 and negatives directly (a <w:start>
+        // of 0 must render "0", not a clamped "1" that duplicates the next
+        // item's marker). Every other format — letters, roman, the CJK/Korean
+        // counting tables, enclosed glyphs — has no zero or negative form, so
+        // keep clamping those to 1 (matches Word).
+        if (n < 1 && fmt != "decimal") n = 1;
+        switch (fmt)
         {
             case "decimal": return n.ToString(CultureInfo.InvariantCulture);
             case "decimalzero": return n < 10 ? $"0{n}" : n.ToString(CultureInfo.InvariantCulture);
@@ -29,11 +35,18 @@ public static class WordNumFmtRenderer
             case "ordinaltext": return ToEnglishOrdinal(n);
             case "chinesecounting":
             case "japanesecounting":
-                return ToChineseCounting(n, formal: false);
             case "chinesecountingthousand":
+                // "Counting" / "CountingThousand" render ordinary hanzi
+                // (一二三, 萬 at 10000) in real Word — verified via officeshot.
+                // Only the "Legal" formats are the financial/capital glyphs
+                // (壹貳參); see chineseLegalSimplified / koreanLegal below.
+                return ToChineseCounting(n, formal: false);
             case "taiwanesecounting":
             case "taiwanesecountingthousand":
-                return ToChineseCounting(n, formal: true);
+                // Traditional ordinary hanzi (一二三 … 十百千) — identical to
+                // simplified except 10000 uses traditional 萬 (vs simplified
+                // 万). Verified ordinary (not financial) via officeshot.
+                return ToTraditionalCounting(n);
             case "chineselegalsimplified":
                 return ToChineseLegalSimplified(n);
             case "ideographdigital":
@@ -41,25 +54,55 @@ public static class WordNumFmtRenderer
             case "japanesedigitaltenthousand":
                 return ToIdeographDigital(n);
             case "koreandigital":
-            case "koreandigital2":
                 return ToKoreanDigital(n);
+            // koreanDigital2 renders CJK numerals (一二三 …, positional) in real
+            // Word — NOT sino-korean Hangul digits. Verified via officeshot
+            // (fams.docx): koreanDigital2 items show 一/二/三, identical to the
+            // ideographDigital family. Despite the "korean" name the glyphs are
+            // han ideographs.
+            case "koreandigital2":
+                return ToIdeographDigital(n);
             case "koreancounting":
                 return ToKoreanCounting(n);
             case "koreanlegal":
                 return ToKoreanLegal(n);
             case "japaneselegal":
                 return ToJapaneseLegal(n);
+            case "ideographlegaltraditional":
+                // Traditional Chinese financial/capital glyphs 壹貳參…拾佰仟萬.
+                // Identical to ToChineseCounting(formal:true) — same digit and
+                // unit tables Word uses for the traditional legal format.
+                // (ECMA-376 §17.18.59 "ideographLegalTraditional".)
+                return ToChineseCounting(n, formal: true);
+            // Japanese kana enumeration. Word renders aiueo/aiueoFullWidth as
+            // full-width katakana in gojūon order, and iroha/irohaFullWidth as
+            // full-width katakana in iroha order. The bare and *FullWidth
+            // tokens produce identical full-width glyphs in Word.
+            case "aiueo":
+            case "aiueofullwidth":
+                return ToRecycledTable(n, KatakanaAiueo);
+            case "iroha":
+            case "irohafullwidth":
+                return ToRecycledTable(n, KatakanaIroha);
+            // Korean leading consonants (초성), Hangul Compatibility Jamo block.
+            case "chosung":
+                return ToRecycledTable(n, KoreanChosung);
             case "ideographtraditional":
                 return ToHeavenlyStems(n);
             case "ideographzodiac":
                 return ToEarthlyBranches(n);
+            // Sexagenary (干支) cycle: heavenly-stem + earthly-branch pair,
+            // 甲子 乙丑 丙寅 … (60-cycle). Distinct from ideographZodiac, which
+            // is the bare earthly branch. Verified via officeshot.
+            case "ideographzodiactraditional":
+                return ToSexagenary(n);
             case "decimalenclosedcircle":
             case "decimalenclosedcirclechinese":
                 return ToEnclosedCircle(n);
             case "decimalenclosedfullstop":
-                return $"{n}．";
+                return ToEnclosedFullStop(n);
             case "decimalenclosedparen":
-                return $"({n})";
+                return ToEnclosedParen(n);
             case "decimalfullwidth":
             case "decimalfullwidth2":
                 return ToFullWidthDigits(n);
@@ -81,6 +124,11 @@ public static class WordNumFmtRenderer
             case "hindicounting":
             case "hindicardinaltext":
                 return ToDevanagariDigits(n);
+            // ECMA-376 §17.18.59 ST_NumberFormat: the canonical value is
+            // "hindiConsonants" (Devanagari consonants क ख ग …); there is no
+            // "hindiLetters" in the schema. Keep "hindiletters" as a tolerant
+            // alias so legacy/typo'd files still render glyphs, not decimal.
+            case "hindiconsonants":
             case "hindiletters":
                 return ToHindiLetters(n);
             case "hindivowels":
@@ -89,6 +137,27 @@ public static class WordNumFmtRenderer
                 return ToRussianAlpha(n, uppercase: false);
             case "russianupper":
                 return ToRussianAlpha(n, uppercase: true);
+            // Uppercase hexadecimal: 1..9, A..F, 10→"A", 16→"10". Word renders
+            // the counter as base-16 (n.ToString("X")). Verified via officeshot.
+            case "hex":
+                return n.ToString("X", CultureInfo.InvariantCulture);
+            // Footnote symbol cycle * † ‡ § (U+002A, U+2020, U+2021, U+00A7),
+            // doubling each glyph past the 4th (5→**, 6→††, …). ECMA-376
+            // §17.18.59 "chicago"; verified via officeshot.
+            case "chicago":
+                return ToChicago(n);
+            // Korean syllable enumeration 가 나 다 … (leading consonant + ㅏ,
+            // 14 glyphs), recycling past 14. Verified via officeshot.
+            case "ganada":
+                return ToRecycledTable(n, KoreanGanada);
+            // Parenthesized CJK ideograph ㈠ ㈡ … ㈩ (U+3220..U+3229, 1..10);
+            // past 10 Word falls back to plain decimal. Verified via officeshot.
+            case "ideographenclosedcircle":
+                return ToParenthesizedIdeograph(n);
+            // Number wrapped in spaced dashes: "- 1 -", "- 2 -". Verified via
+            // officeshot (spaces inside both dashes).
+            case "numberindash":
+                return $"- {n.ToString(CultureInfo.InvariantCulture)} -";
             case "none": return "";
             case "bullet": return "\u2022";
             default: return n.ToString(CultureInfo.InvariantCulture);
@@ -142,12 +211,38 @@ public static class WordNumFmtRenderer
         "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"
     };
 
-    private static string ToEnglishCardinal(int n)
+    // Short-scale group names, largest first. Each entry's divisor is a
+    // power of one thousand. int caps at ~2.1e9 so Billion is the largest
+    // reachable group, but Trillion/Quadrillion are listed for clarity and
+    // in case the input type ever widens.
+    private static readonly (long Divisor, string Name)[] EnglishScales =
+    {
+        (1_000_000_000_000_000_000L, "Quintillion"),
+        (1_000_000_000_000_000L, "Quadrillion"),
+        (1_000_000_000_000L, "Trillion"),
+        (1_000_000_000L, "Billion"),
+        (1_000_000L, "Million"),
+        (1_000L, "Thousand"),
+    };
+
+    private static string ToEnglishCardinal(int n) => ToEnglishCardinal((long)n);
+
+    private static string ToEnglishCardinal(long n)
     {
         if (n == 0) return "Zero";
         if (n < 0) return $"Negative {ToEnglishCardinal(-n)}";
         var sb = new StringBuilder();
-        if (n >= 1000) { sb.Append(ToEnglishCardinal(n / 1000)).Append(" Thousand"); n %= 1000; if (n > 0) sb.Append(' '); }
+        // Emit each thousand-power group with its scale word (One Million,
+        // Two Thousand, …) instead of recursively re-appending "Thousand".
+        foreach (var (divisor, name) in EnglishScales)
+        {
+            if (n >= divisor)
+            {
+                sb.Append(ToEnglishCardinal(n / divisor)).Append(' ').Append(name);
+                n %= divisor;
+                if (n > 0) sb.Append(' ');
+            }
+        }
         if (n >= 100) { sb.Append(EnglishOnes[n / 100]).Append(" Hundred"); n %= 100; if (n > 0) sb.Append(' '); }
         if (n >= 20) { sb.Append(EnglishTens[n / 10]); n %= 10; if (n > 0) sb.Append('-').Append(EnglishOnes[n]); }
         else if (n > 0) sb.Append(EnglishOnes[n]);
@@ -190,6 +285,11 @@ public static class WordNumFmtRenderer
 
     private static string ToChineseLegalSimplified(int n)
         => BuildCjkPositional(n, CnLegalSimplDigits, '拾', '佰', '仟', '万');
+
+    /// <summary>Traditional ordinary counting: ordinary hanzi digits/units but
+    /// traditional 萬 for the 10000 place (taiwaneseCounting family).</summary>
+    private static string ToTraditionalCounting(int n)
+        => BuildCjkPositional(n, CnDigits, '十', '百', '千', '萬');
 
     private static string BuildCjkPositional(int n, char[] digits, char shi, char bai, char qian, char wan)
     {
@@ -252,6 +352,35 @@ public static class WordNumFmtRenderer
     private static string ToHeavenlyStems(int n) => HeavenlyStems[(n - 1) % 10];
     private static string ToEarthlyBranches(int n) => EarthlyBranches[(n - 1) % 12];
 
+    /// <summary>Sexagenary 干支 pair: heavenly-stem (10-cycle) + earthly-branch
+    /// (12-cycle), e.g. 甲子 乙丑 … — a 60-element cycle.</summary>
+    private static string ToSexagenary(int n)
+    {
+        if (n < 1) n = 1;
+        return HeavenlyStems[(n - 1) % 10] + EarthlyBranches[(n - 1) % 12];
+    }
+
+    // Footnote symbol cycle (ECMA-376 §17.18.59 "chicago"): *, †, ‡, § then
+    // doubled (**, ††, …), tripled, … as the index passes each table multiple.
+    private static readonly char[] ChicagoSymbols = { '*', '†', '‡', '§' };
+
+    private static string ToChicago(int n)
+    {
+        if (n < 1) n = 1;
+        var glyph = ChicagoSymbols[(n - 1) % ChicagoSymbols.Length];
+        var repeat = Math.Min(((n - 1) / ChicagoSymbols.Length) + 1, 64);
+        return new string(glyph, repeat);
+    }
+
+    // Parenthesized CJK ideograph one..ten — U+3220..U+3229 (一..十). Word
+    // renders ideographEnclosedCircle with these single glyphs for 1..10 and
+    // falls back to plain decimal beyond 10.
+    private static string ToParenthesizedIdeograph(int n)
+    {
+        if (n >= 1 && n <= 10) return ((char)(0x3220 + n - 1)).ToString();
+        return n.ToString(CultureInfo.InvariantCulture);
+    }
+
     private static string ToEnclosedCircle(int n)
     {
         // ① .. ⑳ = U+2460..U+2473 (1..20)
@@ -259,6 +388,16 @@ public static class WordNumFmtRenderer
         // 21..35 at U+3251..U+325F (Word uses similar enclosed glyphs); fallback to (n)
         if (n >= 21 && n <= 35) return ((char)(0x3251 + n - 21)).ToString();
         if (n >= 36 && n <= 50) return ((char)(0x32B1 + n - 36)).ToString();
+        return $"({n})";
+    }
+
+    // Parenthesized digit glyphs ⑴⑵⑶ … U+2474..U+2487 cover 1..20 (U+2474 is
+    // "PARENTHESIZED DIGIT ONE"). Real Word renders decimalEnclosedParen with
+    // these single glyphs, consistent with decimalEnclosedCircle (①) and
+    // decimalEnclosedFullstop (⒈). Beyond 20 fall back to "(n)".
+    private static string ToEnclosedParen(int n)
+    {
+        if (n >= 1 && n <= 20) return ((char)(0x2473 + n)).ToString();
         return $"({n})";
     }
 
@@ -321,8 +460,6 @@ public static class WordNumFmtRenderer
 
     private static readonly char[] KoreanSinoDigits = // 〇일이삼사오육칠팔구
         { '〇', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구' };
-    private static readonly string[] KoreanNativeCounting = // 하나..열
-        { "", "하나", "둘", "셋", "넷", "다섯", "여섯", "일곱", "여덟", "아홉", "열" };
 
     /// <summary>Positional sino-korean digits: 1 → 일, 25 → 이오, 100 → 일〇〇.</summary>
     private static string ToKoreanDigital(int n)
@@ -334,13 +471,41 @@ public static class WordNumFmtRenderer
         return sb.ToString();
     }
 
-    /// <summary>Native Korean counting 1..10, beyond that falls back to sino-korean digital.</summary>
+    /// <summary>Korean counting renders sino-korean digits (일이삼 …) — the
+    /// same glyphs as koreanDigital — in real Word, NOT native counting words
+    /// (하나/둘/셋). Verified via officeshot.</summary>
     private static string ToKoreanCounting(int n)
-        => n is >= 1 and <= 10 ? KoreanNativeCounting[n] : ToKoreanDigital(n);
+        => ToKoreanDigital(n);
 
-    /// <summary>Korean legal (formal) numerals share the Chinese formal hanzi set.</summary>
+    // Native Korean counting words (고유어 수사): 하나 둘 셋 … up to 열아홉,
+    // then 스물… Real Word renders koreanLegal with these, NOT the Chinese
+    // formal hanzi (壹貳參). Verified via officeshot (fams.docx) — koreanLegal
+    // items show 하나/둘/셋. Word's enumeration practically tops out in the low
+    // tens; beyond the table we fall back to decimal.
+    private static readonly string[] KoreanNativeOnes =
+        { "", "하나", "둘", "셋", "넷", "다섯", "여섯", "일곱", "여덟", "아홉" };
+    private static readonly string[] KoreanNativeTens =
+        { "", "열", "스물", "서른", "마흔", "쉰", "예순", "일흔", "여든", "아흔" };
+
+    /// <summary>Korean legal renders native Korean counting words (하나/둘/셋).</summary>
     private static string ToKoreanLegal(int n)
-        => ToChineseCounting(n, formal: true);
+    {
+        if (n < 1 || n > 99) return n.ToString(CultureInfo.InvariantCulture);
+        var tens = n / 10;
+        var ones = n % 10;
+        return KoreanNativeTens[tens] + KoreanNativeOnes[ones];
+    }
+
+    // Enclosed digit-with-full-stop glyphs ⒈⒉⒊ … U+2488..U+249B cover 1..20
+    // (U+2488 is literally named "DIGIT ONE FULL STOP"). Real Word renders
+    // decimalEnclosedFullstop with these single glyphs (the trailing literal
+    // "." some lists show comes from the level's lvlText, not the marker).
+    // Verified via officeshot (fams.docx). Beyond 20 fall back to "n.".
+    private static string ToEnclosedFullStop(int n)
+    {
+        if (n >= 1 && n <= 20) return ((char)(0x2487 + n)).ToString();
+        return $"{n}.";
+    }
 
     /// <summary>Japanese legal uses modern formal kanji 壱弐参肆伍陸漆捌玖拾.</summary>
     private static readonly char[] JpFormalDigits =
@@ -406,11 +571,61 @@ public static class WordNumFmtRenderer
         return vowels[(n - 1) % vowels.Length].ToString();
     }
 
+    // Japanese full-width katakana, gojūon (あいうえお) order — 46 glyphs.
+    private static readonly char[] KatakanaAiueo =
+    {
+        'ア','イ','ウ','エ','オ','カ','キ','ク','ケ','コ',
+        'サ','シ','ス','セ','ソ','タ','チ','ツ','テ','ト',
+        'ナ','ニ','ヌ','ネ','ノ','ハ','ヒ','フ','ヘ','ホ',
+        'マ','ミ','ム','メ','モ','ヤ','ユ','ヨ','ラ','リ',
+        'ル','レ','ロ','ワ','ヲ','ン'
+    };
+
+    // Japanese full-width katakana, iroha order — 48 glyphs (includes archaic
+    // ヰ/ヱ).
+    private static readonly char[] KatakanaIroha =
+    {
+        'イ','ロ','ハ','ニ','ホ','ヘ','ト','チ','リ','ヌ',
+        'ル','ヲ','ワ','カ','ヨ','タ','レ','ソ','ツ','ネ',
+        'ナ','ラ','ム','ウ','ヰ','ノ','オ','ク','ヤ','マ',
+        'ケ','フ','コ','エ','テ','ア','サ','キ','ユ','メ',
+        'ミ','シ','ヱ','ヒ','モ','セ','ス','ン'
+    };
+
+    // Korean leading consonants (초성), Hangul Compatibility Jamo — 14 glyphs.
+    private static readonly char[] KoreanChosung =
+    {
+        'ㄱ','ㄴ','ㄷ','ㄹ','ㅁ','ㅂ','ㅅ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'
+    };
+
+    // Korean syllable enumeration (ganada): leading-consonant + vowel ㅏ —
+    // 가 나 다 라 마 바 사 아 자 차 카 타 파 하 (14, Hangul Syllables block).
+    private static readonly char[] KoreanGanada =
+    {
+        '가','나','다','라','마','바','사','아','자','차','카','타','파','하'
+    };
+
+    /// <summary>Single-symbol enumeration that recycles to repeated glyphs past
+    /// the table end (1→A, table.Length→last, +1→AA, …), matching Word's
+    /// symbol-recycling behavior. Mirrors <see cref="ToAlpha"/>'s repeat
+    /// model with the same DoS cap.</summary>
+    private static string ToRecycledTable(int n, char[] table)
+    {
+        if (n < 1) n = 1;
+        var glyph = table[(n - 1) % table.Length];
+        var repeat = Math.Min(((n - 1) / table.Length) + 1, 64);
+        return new string(glyph, repeat);
+    }
+
     private static string ToRussianAlpha(int n, bool uppercase)
     {
-        if (n < 1 || n > RussianAlphaLower.Length)
-            return n.ToString(CultureInfo.InvariantCulture);
-        var s = RussianAlphaLower[n - 1];
-        return uppercase ? s.ToUpperInvariant() : s;
+        // Same recycling rule as ToAlpha: а,б,…,я,аа,бб,… (repeating letter
+        // past the 28-letter set), with the identical DoS cap of 64 repeats
+        // for adversarial <w:start>.
+        if (n < 1) n = 1;
+        var s = RussianAlphaLower[(n - 1) % RussianAlphaLower.Length];
+        var repeat = Math.Min(((n - 1) / RussianAlphaLower.Length) + 1, 64);
+        var glyph = new string(s[0], repeat);
+        return uppercase ? glyph.ToUpperInvariant() : glyph;
     }
 }

@@ -22,6 +22,7 @@ def extract_docx_with_python_docx(docx_path: str) -> str | None:
         print(f"  [warn] extract_docx_with_python_docx failed: {type(e).__name__}: {e}", file=sys.stderr)
         return None
 
+
 def extract_docx_with_zipfile(docx_path: str) -> str | None:
     try:
         import xml.etree.ElementTree as ET
@@ -41,7 +42,32 @@ def extract_docx_with_zipfile(docx_path: str) -> str | None:
         return None
 
 
+def validate_docx_xml_safety(docx_path: str) -> None:
+    """Scan all XML files in the DOCX zip archive to prevent XML Entity Expansion (Billion Laughs) and XXE injections."""
+    try:
+        with zipfile.ZipFile(docx_path) as zf:
+            for name in zf.namelist():
+                if name.endswith(".xml") or name.endswith(".rels"):
+                    xml_bytes = zf.read(name)
+                    for encoding in ("utf-8", "utf-16", "utf-16le", "utf-16be", "utf-32"):
+                        try:
+                            content = xml_bytes.decode(encoding, errors="ignore").upper()
+                        except LookupError:
+                            continue
+                        if "<!DOCTYPE" in content or "<!ENTITY" in content:
+                            raise ExtractionError(
+                                f"Security validation failed: XML file '{name}' in DOCX archive contains forbidden DTD or entity declarations."
+                            )
+    except zipfile.BadZipFile as e:
+        raise ExtractionError(f"Invalid DOCX file: {e}")
+    except ExtractionError:
+        raise
+    except Exception as e:
+        raise ExtractionError(f"Error during security validation of DOCX archive: {e}")
+
+
 def extract_docx(docx_path: str) -> tuple[str, str]:
+    validate_docx_xml_safety(docx_path)
     print("Trying python-docx...", end=" ", flush=True)
     text = extract_docx_with_python_docx(docx_path)
     if text and text.strip():
@@ -61,4 +87,3 @@ def extract_docx(docx_path: str) -> tuple[str, str]:
         "Install python-docx for best results:\n"
         "  pip3 install python-docx"
     )
-

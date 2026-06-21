@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import filecmp
 import json
 import re
 import shutil
@@ -143,9 +144,11 @@ class ProjectManager:
             "svg_output",
             "svg_final",
             "images",
+            "icons",
             "notes",
             "templates",
             SOURCE_DIRNAME,
+            "analysis",
             "exports",
         ):
             (project_path / rel_path).mkdir(parents=True, exist_ok=True)
@@ -160,10 +163,12 @@ class ProjectManager:
                 "## Directories\n\n"
                 "- `svg_output/`: raw SVG output\n"
                 "- `svg_final/`: finalized SVG output\n"
-                "- `images/`: presentation assets\n"
+                "- `images/`: runtime image pool; converter assets keep their original short filenames when possible\n"
+                "- `icons/`: project icon set — selected library icons copied in (via icon_sync.py) plus any custom icons you add; embedded from here at export\n"
                 "- `notes/`: speaker notes\n"
                 "- `templates/`: project templates\n"
                 "- `sources/`: source materials and normalized markdown\n"
+                "- `analysis/`: machine-extracted intermediate analysis (PPTX intake, image_analysis.csv) — the pipeline's canonical must-read source/asset facts\n"
                 "- `exports/`: main native pptx (timestamped); `_svg.pptx` sibling added when exported with `--svg-snapshot`\n"
                 "- `backup/<timestamp>/`: svg_output/ archive (always written in default-flow mode; safe to delete old timestamps)\n"
             ),
@@ -178,6 +183,11 @@ class ProjectManager:
         sources_dir = project_path / SOURCE_DIRNAME
         sources_dir.mkdir(parents=True, exist_ok=True)
         return sources_dir
+
+    def _analysis_dir(self, project_path: Path) -> Path:
+        analysis_dir = project_path / "analysis"
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        return analysis_dir
 
     def _ensure_unique_path(self, path: Path) -> Path:
         if not path.exists():
@@ -273,6 +283,22 @@ class ProjectManager:
             ]
         )
 
+    def _import_pptx_intake(self, presentation_path: Path, project_dir: Path) -> Path:
+        # Multi-deck intake: each PPTX writes its own `<stem>.identity.json` /
+        # `<stem>.slide_library.json` and is merged into the single multi-deck
+        # index `analysis/source_profile.json` (one entry per source deck).
+        analysis_dir = self._analysis_dir(project_dir)
+        self._run_tool(
+            [
+                sys.executable,
+                str(TOOLS_DIR / "pptx_intake.py"),
+                str(presentation_path),
+                "-o",
+                str(analysis_dir),
+            ]
+        )
+        return analysis_dir
+
     def _import_excel(self, excel_path: Path, markdown_path: Path) -> None:
         self._run_tool(
             [
@@ -304,6 +330,15 @@ class ProjectManager:
                 str(markdown_path),
             ]
         self._run_tool(command)
+
+    def _is_valid_imported_url_markdown(self, markdown_path: Path) -> bool:
+        """Return whether web_to_md produced a usable Markdown source."""
+        if not markdown_path.is_file():
+            return False
+        content = markdown_path.read_text(encoding="utf-8", errors="replace")
+        if "[Failed URLs]:" in content:
+            return False
+        return bool(content.strip())
 
     def _archive_url_record(self, sources_dir: Path, url: str) -> Path:
         file_path = self._ensure_unique_path(sources_dir / f"{derive_url_basename(url)}.url.txt")
@@ -418,11 +453,53 @@ class ProjectManager:
         suffix = "_files"
         return name[:-len(suffix)] if name.endswith(suffix) else name
 
+    def _image_destination_name(
+        self,
+        images_dir: Path,
+        source_file: Path,
+        namespace: str,
+        existing_manifest: dict[str, dict],
+    ) -> str:
+        """Return a short unique image filename for the runtime image pool."""
+        candidate = images_dir / source_file.name
+        if not candidate.exists():
+            return source_file.name
+        try:
+            meta = existing_manifest.get(candidate.name, {})
+            if (
+                meta.get("source_namespace") == namespace
+                and candidate.is_file()
+                and filecmp.cmp(source_file, candidate, shallow=False)
+            ):
+                return candidate.name
+        except OSError:
+            pass
+
+        stem = source_file.stem
+        suffix = source_file.suffix
+        counter = 2
+        while True:
+            candidate = images_dir / f"{stem}_{counter}{suffix}"
+            if not candidate.exists():
+                return candidate.name
+            try:
+                meta = existing_manifest.get(candidate.name, {})
+                if (
+                    meta.get("source_namespace") == namespace
+                    and candidate.is_file()
+                    and filecmp.cmp(source_file, candidate, shallow=False)
+                ):
+                    return candidate.name
+            except OSError:
+                pass
+            counter += 1
+
     def _propagate_image_assets(self, asset_dir: Path, project_dir: Path) -> None:
         """Copy converter-generated image assets and manifest into project images/.
 
-        Files are namespaced by source stem to avoid collisions when multiple
-        DOCX/PPTX sources contain identically-named internal media (image1.png, ...).
+        Filenames are preserved when possible because source Markdown commonly
+        uses short names that are meaningful in context. Only real collisions
+        receive a compact numeric suffix.
         """
         manifest_path = asset_dir / "image_manifest.json"
         if not manifest_path.is_file():
@@ -441,6 +518,19 @@ class ProjectManager:
         images_dir.mkdir(parents=True, exist_ok=True)
 
         namespace = self._namespace_from_asset_dir(asset_dir)
+        existing_manifest: dict[str, dict] = {}
+        destination_manifest = images_dir / "image_manifest.json"
+        if destination_manifest.is_file():
+            try:
+                data = json.loads(destination_manifest.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    existing_manifest = {
+                        item["filename"]: item
+                        for item in data
+                        if isinstance(item, dict) and isinstance(item.get("filename"), str)
+                    }
+            except (OSError, json.JSONDecodeError):
+                existing_manifest = {}
         rename_map: dict[str, str] = {}
 
         copied_count = 0
@@ -449,8 +539,15 @@ class ProjectManager:
                 continue
             if source_file.suffix.lower() not in IMAGE_ASSET_SUFFIXES:
                 continue
-            new_name = f"{namespace}__{source_file.name}"
-            shutil.copy2(source_file, images_dir / new_name)
+            new_name = self._image_destination_name(
+                images_dir,
+                source_file,
+                namespace,
+                existing_manifest,
+            )
+            destination = images_dir / new_name
+            if source_file.resolve() != destination.resolve():
+                shutil.copy2(source_file, destination)
             rename_map[source_file.name] = new_name
             copied_count += 1
 
@@ -462,7 +559,7 @@ class ProjectManager:
             if not isinstance(original, str):
                 continue
             new_item = dict(item)
-            new_item["filename"] = rename_map.get(original, f"{namespace}__{original}")
+            new_item["filename"] = rename_map.get(original, original)
             new_item["source_namespace"] = namespace
             rebased_items.append(new_item)
 
@@ -532,6 +629,7 @@ class ProjectManager:
             "archived": [],
             "markdown": [],
             "assets": [],
+            "analysis": [],
             "notes": [],
             "skipped": [],
         }
@@ -546,17 +644,24 @@ class ProjectManager:
 
         for item in source_items:
             if is_url(item):
-                archived = self._archive_url_record(sources_dir, item)
                 markdown_path = self._ensure_unique_path(
                     sources_dir / f"{derive_url_basename(item)}.md"
                 )
                 try:
                     self._import_url(item, markdown_path)
                 except Exception as exc:  # pragma: no cover - summary path
+                    archived = self._archive_url_record(sources_dir, item)
+                    summary["archived"].append(str(archived))
                     summary["skipped"].append(f"{item}: {exc}")
                     continue
 
-                summary["archived"].append(str(archived))
+                if not self._is_valid_imported_url_markdown(markdown_path):
+                    markdown_path.unlink(missing_ok=True)
+                    archived = self._archive_url_record(sources_dir, item)
+                    summary["archived"].append(str(archived))
+                    summary["skipped"].append(f"{item}: URL conversion produced no usable Markdown")
+                    continue
+
                 summary["markdown"].append(str(markdown_path))
                 self._propagate_companion_image_assets(markdown_path, project_dir)
                 continue
@@ -638,6 +743,13 @@ class ProjectManager:
                     summary["skipped"].append(f"{item}: PDF conversion failed ({exc})")
             elif suffix in PRESENTATION_SUFFIXES:
                 canonical_markdown_path = sources_dir / f"{archived_path.stem}.md"
+                try:
+                    intake_dir = self._import_pptx_intake(archived_path, project_dir)
+                    intake_str = str(intake_dir)
+                    if intake_str not in summary["analysis"]:
+                        summary["analysis"].append(intake_str)
+                except Exception as exc:  # pragma: no cover - summary path
+                    summary["notes"].append(f"{item}: PPTX intake analysis failed ({exc})")
                 if archived_path.stem in explicit_markdown_stems:
                     summary["notes"].append(
                         f"{item}: skipped presentation auto-conversion because a same-stem Markdown source was provided"
@@ -822,6 +934,10 @@ def main(argv: list[str] | None = None) -> int:
             if summary["assets"]:
                 print("\nImported asset directories:")
                 for item in summary["assets"]:
+                    print(f"  - {item}")
+            if summary["analysis"]:
+                print("\nAnalysis artifacts:")
+                for item in summary["analysis"]:
                     print(f"  - {item}")
             if summary["notes"]:
                 print("\nNotes:")

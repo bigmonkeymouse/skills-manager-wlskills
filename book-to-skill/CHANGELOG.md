@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **DOCX XXE / Billion Laughs hardening** — the DOCX extractor now scans the
+  archive and rejects any XML part that declares a DTD or entities before
+  parsing, blocking XML external-entity and entity-expansion attacks (#53, #54).
+- **Subprocess argument-injection hardening** — file paths are absolutised
+  before being passed to `pdftotext` / `pdfinfo` / `ebook-convert`, so a filename
+  starting with `-` cannot be interpreted as a command-line option (#53, #54).
+- **Dependency CVE review on pull requests** — a `dependency-review` CI job
+  flags any newly introduced dependency carrying a moderate-or-higher CVE (or a
+  denied license) and posts the findings as a PR comment. Dependabot now also
+  covers the `pip` ecosystem.
+
+### Changed
+- **The `pdf` extra now installs `pypdf` instead of the deprecated `PyPDF2`**
+  (`pip install book-to-skill[pdf]`). `pypdf` is the maintained successor;
+  `PyPDF2` is end-of-life and no longer receives security fixes (#54).
+
+### Fixed
+- The dependency-free RTF fallback (used when `striprtf` is not installed) now
+  decodes `\uN` unicode escapes — smart quotes, dashes, accented letters — instead
+  of dropping them and leaving only the ASCII fallback character.
+
 ## [1.2.0] — 2026-06-17
 
 ### Added

@@ -15,6 +15,64 @@ public partial class WordHandler : IDocumentHandler
     private HashSet<string> _usedParaIds = new(StringComparer.OrdinalIgnoreCase);
     private int _nextParaId = 0x100000;
     public int LastFindMatchCount { get; internal set; }
+
+    // StyleId → Style index, lazily built to make style-chain resolution O(1)
+    // per hop. Before this, ResolveNumPrFromStyle / ResolveEffectiveRunProperties
+    // / GetParagraphListStyle and the HtmlPreview/Query style walks each did a
+    // LINEAR Elements<Style>().FirstOrDefault(StyleId==id) PER basedOn hop —
+    // O(paragraphs × chainDepth × totalStyles), which HANGS on heavily templated
+    // docs (deep basedOn chains × thousands of styles).
+    //
+    // MUTATION-SAFE: the cache validates against the live <w:styles> element's
+    // reference identity ONLY (O(1) — a child-element COUNT check would be O(n)
+    // in the SDK's linked-list ChildElements and re-introduce the per-hop O(n)
+    // we are eliminating). A freshly created/rebuilt StyleDefinitionsPart swaps
+    // the reference and self-invalidates. Same-instance mutations (Add appends a
+    // Style, Remove drops one) keep the reference, so those two sites explicitly
+    // call InvalidateStyleIndex(). `set /styles/X` only mutates a style's
+    // PROPERTIES (never its id), so it needs no invalidation — the index maps
+    // StyleId→Style by reference and the same object is still the right target.
+    private Dictionary<string, Style>? _styleByIdCache;
+    private Styles? _styleByIdCacheOwner;
+
+    /// <summary>Drop the StyleId→Style index. Called by the (few) paths that add
+    /// or remove a &lt;w:style&gt; on the EXISTING styles element.</summary>
+    private void InvalidateStyleIndex()
+    {
+        _styleByIdCache = null;
+        _styleByIdCacheOwner = null;
+    }
+
+    /// <summary>
+    /// O(1) StyleId lookup through a lazily-built, reference-validated index.
+    /// Replaces the per-hop linear <c>Elements&lt;Style&gt;().FirstOrDefault(
+    /// s =&gt; s.StyleId?.Value == id)</c> scan used throughout style-chain
+    /// resolution. Returns null when no styles part exists or no style matches.
+    /// On a duplicate StyleId (malformed doc) the FIRST in document order wins —
+    /// matching the original FirstOrDefault semantics.
+    /// </summary>
+    private Style? FindStyleById(string? styleId)
+    {
+        if (styleId == null) return null;
+        var styles = _doc.MainDocumentPart?.StyleDefinitionsPart?.Styles;
+        if (styles == null) return null;
+
+        if (_styleByIdCache == null || !ReferenceEquals(styles, _styleByIdCacheOwner))
+        {
+            var dict = new Dictionary<string, Style>(StringComparer.Ordinal);
+            foreach (var s in styles.Elements<Style>())
+            {
+                var id = s.StyleId?.Value;
+                // First-wins on duplicate id (FirstOrDefault parity).
+                if (id != null && !dict.ContainsKey(id)) dict[id] = s;
+            }
+            _styleByIdCache = dict;
+            _styleByIdCacheOwner = styles;
+        }
+
+        return _styleByIdCache.TryGetValue(styleId, out var found) ? found : null;
+    }
+
     // Number of elements a no-slash selector Set matched and mutated (Sheet1!row[...]).
     // Read by the CLI/resident to echo the multi-element change count.
     public int LastSelectorSetCount { get; internal set; }
@@ -406,7 +464,13 @@ public partial class WordHandler : IDocumentHandler
         // position:absolute / margin-left / margin-top / z-index / wrap hints)
         // plus the w:object native size, so a floating OLE round-trips out of the
         // text flow instead of collapsing to inline (which pushes content down).
-        string? ShapeStyle, string? DxaOrig, string? DyaOrig);
+        string? ShapeStyle, string? DxaOrig, string? DyaOrig,
+        // The VML <v:imagedata> crop rectangle (cropleft/croptop/cropright/
+        // cropbottom, each a VML "Nf" 1/65536 fraction), serialized as a
+        // semicolon-joined "name:value" list. Dropped on round-trip → Word
+        // renders the full uncropped EMF preview, inflating the object and
+        // pushing every later page down. Captured verbatim for AddOle to splice back.
+        string? Crop);
 
     private const string RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
@@ -476,6 +540,21 @@ public partial class WordHandler : IDocumentHandler
             }
         }
 
+        // BUG-DUMP-OLECROP: capture the VML <v:imagedata> crop attributes verbatim
+        // (cropleft/croptop/cropright/cropbottom). Same imageData element as the
+        // icon lookup above. Without these AddOle rebuilds an uncropped imagedata.
+        string? crop = null;
+        if (imageData != null)
+        {
+            var cropParts = new List<string>();
+            foreach (var cropAttr in new[] { "cropleft", "croptop", "cropright", "cropbottom" })
+            {
+                var cv = imageData.GetAttributes().FirstOrDefault(a => a.LocalName == cropAttr).Value;
+                if (!string.IsNullOrEmpty(cv)) cropParts.Add($"{cropAttr}:{cv}");
+            }
+            if (cropParts.Count > 0) crop = string.Join(";", cropParts);
+        }
+
         string? display = string.IsNullOrEmpty(drawAspect)
             ? null
             : (drawAspect.Equals("Content", StringComparison.OrdinalIgnoreCase) ? "content" : "icon");
@@ -521,7 +600,7 @@ public partial class WordHandler : IDocumentHandler
 
         return new OleEmitData(embeddedBytes, oleKind, embedPart.ContentType, embedExt,
             iconBytes, iconCt, progId, display, width, height, name,
-            shapeStyle, dxaOrig, dyaOrig);
+            shapeStyle, dxaOrig, dyaOrig, crop);
     }
 
     // dump→batch round-trip carrier for an ActiveX form-control run — a
@@ -1158,6 +1237,43 @@ public partial class WordHandler : IDocumentHandler
             return;
         }
 
+        // Fast-path: a raw-set that inserts ONE <w:p> immediately before the
+        // body's trailing sectPr. The dump emits one such op per cross-paragraph
+        // field-span member (EmitCrossParagraphFieldMember) — e.g. 785 of them for
+        // a large back-of-book INDEX field, perfectly consecutive at end of batch.
+        // The generic path re-serializes the whole document part per op
+        // (rootElement.OuterXml + XDocument.Parse + InnerXml=) — O(part) each,
+        // turning a 7MB / 11k-paragraph batch into O(n²) (minutes). Insert on the
+        // live SDK DOM instead (O(fragment), O(1) via the append-monotonic cache).
+        // Same opt-not-behavior contract as the /styles fast-path: any deviation
+        // (xpath shape, missing body/sectPr, unparseable fragment) falls through.
+        if (lowerPath is "/document" or "/"
+            && (string.Equals(action, "before", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(action, "insertbefore", StringComparison.OrdinalIgnoreCase))
+            && xml != null
+            && TryInsertBodyParaBeforeSectPrFast(mainPart, xpath, xml))
+        {
+            return;
+        }
+
+        // Fast-path: a raw-set rooted at a single body table by its global
+        // document-order ordinal — (//w:tbl)[N] or (//w:tbl)[N]/<tail>. The dump
+        // emits one such op per verbatim cell-content fallback (rich field result,
+        // nested SDT, VML textbox) plus tblGrid / cellMerge round-trips — e.g. 2580
+        // of them for a 757-table report. The generic path re-serializes the whole
+        // multi-MB document part per op (rootElement.OuterXml + XDocument.Parse +
+        // InnerXml=) — O(part) each, turning a table-heavy batch into O(ops × part)
+        // (minutes). Resolve the Nth table on the live SDK DOM and run the XPath
+        // engine against that table's subtree only (O(table), a few KB). Same
+        // opt-not-behavior contract as the /styles and sectPr fast-paths above: any
+        // deviation (xpath shape, ordinal out of range, 0 matches, unparseable
+        // fragment) returns false and falls through to the proven generic path.
+        if (lowerPath is "/document" or "/"
+            && TryRawSetWithinTableFast(mainPart, xpath, action, xml))
+        {
+            return;
+        }
+
         if (lowerPath is "/document" or "/")
             rootElement = mainPart.Document ?? throw new InvalidOperationException("No document");
         else if (lowerPath is "/styles")
@@ -1414,6 +1530,151 @@ public partial class WordHandler : IDocumentHandler
         return true;
     }
 
+    // Compiled matcher for a raw-set xpath rooted at a single table by global
+    // document-order ordinal: (//w:tbl)[N] optionally followed by a child path.
+    // See the cell-append fast-path in RawSet.
+    private static readonly System.Text.RegularExpressions.Regex _tableCellAppendXpath =
+        new(@"^\(//w:tbl\)\[(\d+)\]/w:tr\[(\d+)\]/w:tc\[(\d+)\]$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Namespace prefixes declared on the synthetic <w:body> wrapper used to parse
+    // a verbatim cell-content fragment, so a fragment that relies on an inherited
+    // prefix (one not among its own inline xmlns) still parses. Mirrors the prefix
+    // set the generic raw-set path has in scope; Word-specific and intentionally
+    // narrow. A fragment whose prefix is missing here simply fails to parse and
+    // falls through to the generic path — never silently wrong.
+    private static readonly (string prefix, string uri)[] _wordFragmentNs =
+    {
+        ("w",   "http://schemas.openxmlformats.org/wordprocessingml/2006/main"),
+        ("r",   "http://schemas.openxmlformats.org/officeDocument/2006/relationships"),
+        ("a",   "http://schemas.openxmlformats.org/drawingml/2006/main"),
+        ("wp",  "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"),
+        ("mc",  "http://schemas.openxmlformats.org/markup-compatibility/2006"),
+        ("pic", "http://schemas.openxmlformats.org/drawingml/2006/picture"),
+        ("w14", "http://schemas.microsoft.com/office/word/2010/wordml"),
+        ("wps", "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"),
+        ("wpg", "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"),
+        ("a14", "http://schemas.microsoft.com/office/drawing/2010/main"),
+        ("v",   "urn:schemas-microsoft-com:vml"),
+        ("o",   "urn:schemas-microsoft-com:office:office"),
+    };
+
+    // Append a verbatim cell-content fragment — the dump's
+    // raw-set (//w:tbl)[N]/w:tr[M]/w:tc[K] append for a rich field result / nested
+    // SDT / VML textbox — directly onto the live cell, bypassing the generic
+    // whole-document serialize/parse round-trip. The generic path re-serializes the
+    // whole multi-MB document part per op (rootElement.OuterXml + XDocument.Parse +
+    // InnerXml=), making a table-heavy batch O(ops × part) — minutes for a
+    // 757-table report. Here the existing table content is never re-serialized
+    // (which is what would otherwise stamp redundant xmlns onto every rebuilt
+    // tbl/tr/tc/p); only the fragment is parsed and grafted, so the saved bytes
+    // match the generic path (both keep the fragment's own inline xmlns).
+    // Returns false — caller falls through to the proven generic path — for any
+    // xpath that is not the exact cell-append shape, an out-of-range index, or a
+    // fragment the SDK cannot parse. Gated to DeferSave (batch): the generic path
+    // runs the per-op global id sweeps (paraId/docPr/sdt/bookmark) eagerly outside
+    // a batch, and verbatim cell content carries those ids; under DeferSave they
+    // run once in FinalizeDeferredIds over the deferred roots, which this mirrors.
+    private bool TryRawSetWithinTableFast(MainDocumentPart mainPart, string xpath, string action, string? xml)
+    {
+        if (!DeferSave) return false;
+        if (xml == null) return false;
+        if (!string.Equals(action, "append", StringComparison.OrdinalIgnoreCase)) return false;
+        var m = _tableCellAppendXpath.Match(xpath);
+        if (!m.Success) return false;
+        var document = mainPart.Document;
+        if (document == null) return false;
+        if (!int.TryParse(m.Groups[1].Value, out var n) || n < 1) return false;
+        if (!int.TryParse(m.Groups[2].Value, out var r) || r < 1) return false;
+        if (!int.TryParse(m.Groups[3].Value, out var c) || c < 1) return false;
+        // (//w:tbl)[N] — Nth <w:tbl> in document order (the SDK's Descendants<T>()
+        // walk is pre-order DFS, the same order XPath's // axis yields); then the
+        // Mth direct <w:tr> child and that row's Kth direct <w:tc> child, matching
+        // the literal /w:tr[M]/w:tc[K] child-axis steps. Any out-of-range index
+        // falls through to the generic path.
+        var table = document.Descendants<Table>().ElementAtOrDefault(n - 1);
+        if (table == null) return false;
+        var row = table.Elements<TableRow>().ElementAtOrDefault(r - 1);
+        if (row == null) return false;
+        var cell = row.Elements<TableCell>().ElementAtOrDefault(c - 1);
+        if (cell == null) return false;
+        // Parse the fragment inside a synthetic <w:body> that declares the common
+        // Word prefixes (so a fragment relying on an inherited prefix still parses)
+        // then graft its children onto the live cell. The fragment keeps its own
+        // inline xmlns exactly as the generic path's append does, and — crucially —
+        // the surrounding table is left untouched, so no redundant xmlns is stamped
+        // onto existing content.
+        var sb = new System.Text.StringBuilder("<w:body");
+        foreach (var (prefix, uri) in _wordFragmentNs)
+            sb.Append(" xmlns:").Append(prefix).Append("=\"").Append(uri).Append('"');
+        sb.Append('>').Append(xml).Append("</w:body>");
+        Body holder;
+        try { holder = new Body(sb.ToString()); }
+        catch { return false; }
+        var appended = holder.ChildElements.ToList();
+        if (appended.Count == 0) return false;
+        foreach (var child in appended)
+        {
+            child.Remove();
+            cell.AppendChild(child);
+        }
+        (_deferredRawSetRoots ??= new HashSet<OpenXmlPartRootElement>()).Add(document);
+        return true;
+    }
+
+    // Compiled matcher for the dump's cross-paragraph field-member xpath
+    // (/w:document/w:body/w:sectPr). See the body-para fast-path in RawSet.
+    private static readonly System.Text.RegularExpressions.Regex _bodySectPrXpath =
+        new(@"^/w:document/w:body/w:sectPr$",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Insert exactly one <w:p> immediately before the body's trailing sectPr on
+    // the live document DOM, bypassing the generic whole-part serialize/parse
+    // round-trip. Returns false (caller falls through to the generic path) for any
+    // xpath that is not the exact /w:document/w:body/w:sectPr shape, a missing
+    // body/sectPr, or a fragment the SDK cannot parse as a <w:p> — so it is a pure
+    // optimization with no behavior change. Gated to DeferSave (batch): outside a
+    // batch the generic path runs the per-op global id sweeps (paraId/docPr/sdt/
+    // bookmark) eagerly, and a verbatim <w:p> can carry those ids; under DeferSave
+    // those sweeps are deferred to FinalizeDeferredIds exactly as the generic
+    // DeferSave raw-set path defers them, so the fast path matches its behavior.
+    private bool TryInsertBodyParaBeforeSectPrFast(MainDocumentPart mainPart, string xpath, string xml)
+    {
+        if (!DeferSave) return false;
+        if (!_bodySectPrXpath.IsMatch(xpath)) return false;
+        var body = mainPart.Document?.Body;
+        if (body == null) return false;
+        // The body-level sectPr is always the last child of <w:body> (ECMA-376).
+        if (body.LastChild is not SectionProperties sectPr)
+            return false; // no trailing sectPr to anchor before — fall through
+        Paragraph newPara;
+        try { newPara = new Paragraph(xml); }
+        catch { return false; }
+        if (newPara.LocalName != "p") return false; // fragment must be a paragraph
+        // O(1) insert via the append-monotonic cache (mirrors AppendBodyParaFast):
+        // the cached last body paragraph sits right before sectPr, so
+        // InsertAfterSelf keeps sectPr last and avoids the SDK singly-linked
+        // list's O(N) InsertBefore predecessor scan (which made N consecutive
+        // member inserts O(N²)).
+        if (_bodyParaCount >= 0
+            && _lastBodyParagraph is Paragraph anchor
+            && ReferenceEquals(anchor.Parent, body)
+            && anchor.NextSibling() is SectionProperties)
+        {
+            anchor.InsertAfterSelf(newPara);
+            _bodyParaCount++;
+        }
+        else
+        {
+            // Cold cache / out-of-band mutation: O(N) insert + reseed.
+            sectPr.InsertBeforeSelf(newPara);
+            _bodyParaCount = body.Elements<Paragraph>().Count();
+        }
+        _lastBodyParagraph = newPara;
+        (_deferredRawSetRoots ??= new HashSet<OpenXmlPartRootElement>()).Add(mainPart.Document!);
+        return true;
+    }
+
     // BUG-DUMP-R45-1 / BUG-DUMP-R45-2: apply an `embed-binary` companion op.
     // partPath selects the host part (/fontTable → FontPart, /numbering →
     // ImagePart); xpath carries the source relationship id to reuse; xml is a
@@ -1618,6 +1879,45 @@ public partial class WordHandler : IDocumentHandler
             EnsureBookmarkIds();
         }
         catch { /* id normalization is best-effort; never block the flush */ }
+        try { NormalizeAllRunPropsSchemaOrder(); }
+        catch { /* schema-order normalization is best-effort; never block the flush */ }
+    }
+
+    // BUG-DUMP-R71-RPR-ORDER: document-wide CT_RPr / CT_ParaRPr child-order
+    // normalization, run once at batch finalization (after the raw-set flush so
+    // it also catches verbatim-injected runs). A run/paragraph-mark rPr can be
+    // assembled across the curated Add path, ApplyRunFormatting, raw AppendChild,
+    // TypedAttributeFallback tail-appends, and verbatim raw-set — any of which
+    // can leave a child out of CT_RPr order (sz after u, ins after rStyle),
+    // which strict OOXML validation rejects. Re-seat every standard (non-w14)
+    // rPr child into its schema slot. Content-preserving (pure reorder); only
+    // touches rPr that were already out of order. Covers the main document plus
+    // header/footer/footnote/endnote parts.
+    private void NormalizeAllRunPropsSchemaOrder()
+    {
+        var main = _doc.MainDocumentPart;
+        if (main == null) return;
+        IEnumerable<OpenXmlElement?> roots = new OpenXmlElement?[] { main.Document?.Body }
+            .Concat(main.HeaderParts.Select(h => (OpenXmlElement?)h.Header))
+            .Concat(main.FooterParts.Select(f => (OpenXmlElement?)f.Footer))
+            .Append(main.FootnotesPart?.Footnotes)
+            .Append(main.EndnotesPart?.Endnotes);
+        foreach (var root in roots)
+        {
+            if (root == null) continue;
+            foreach (var rPr in root.Descendants<RunProperties>().ToList())
+                NormalizeRunPropsSchemaOrder(rPr);
+            foreach (var pmRpr in root.Descendants<ParagraphMarkRunProperties>().ToList())
+            {
+                NormalizeRunPropsSchemaOrder(pmRpr);
+                // The paragraph-mark rPr itself must sit at its CT_PPr slot
+                // (after numPr/spacing, before sectPr/pPrChange); a verbatim or
+                // mixed-path pPr build can land it out of order ("unexpected
+                // child element rPr"). Re-seat the element within its pPr.
+                if (pmRpr.Parent is OpenXmlCompositeElement pPrParent)
+                    Core.SchemaOrder.Place(pPrParent, pmRpr);
+            }
+        }
     }
 
     /// <summary>

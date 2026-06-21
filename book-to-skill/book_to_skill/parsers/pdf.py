@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -9,6 +10,7 @@ def extract_with_pdftotext(pdf_path: str) -> str | None:
     if not shutil.which("pdftotext"):
         return None
     try:
+        pdf_path = os.path.abspath(pdf_path)
         result = subprocess.run(
             ["pdftotext", "-layout", pdf_path, "-"],
             capture_output=True, text=True, timeout=120
@@ -20,12 +22,12 @@ def extract_with_pdftotext(pdf_path: str) -> str | None:
     return None
 
 
-def extract_with_pypdf2(pdf_path: str) -> str | None:
+def extract_with_pypdf(pdf_path: str) -> str | None:
     try:
-        import PyPDF2
+        import pypdf
         text_parts = []
         with open(pdf_path, "rb") as f:
-            reader = PyPDF2.PdfReader(f)
+            reader = pypdf.PdfReader(f)
             for page in reader.pages:
                 try:
                     text_parts.append(page.extract_text() or "")
@@ -35,7 +37,7 @@ def extract_with_pypdf2(pdf_path: str) -> str | None:
     except ImportError:
         return None
     except Exception as e:
-        print(f"  [warn] extract_with_pypdf2 failed: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"  [warn] extract_with_pypdf failed: {type(e).__name__}: {e}", file=sys.stderr)
         return None
 
 
@@ -80,6 +82,7 @@ def count_pages(pdf_path: str) -> int:
     # Try pdfinfo first
     if shutil.which("pdfinfo"):
         try:
+            pdf_path = os.path.abspath(pdf_path)
             result = subprocess.run(
                 ["pdfinfo", pdf_path], capture_output=True, text=True, timeout=15
             )
@@ -88,10 +91,10 @@ def count_pages(pdf_path: str) -> int:
                     return int(line.split(":")[1].strip())
         except Exception:
             pass
-    # Fallback: count form-feed chars (pdftotext -layout uses \f between pages)
+    # Fallback: count pages with pypdf
     try:
-        import PyPDF2
+        import pypdf
         with open(pdf_path, "rb") as f:
-            return len(PyPDF2.PdfReader(f).pages)
+            return len(pypdf.PdfReader(f).pages)
     except Exception:
         return 0

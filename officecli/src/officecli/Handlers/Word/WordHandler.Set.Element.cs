@@ -973,8 +973,14 @@ public partial class WordHandler
             consumed.UnionWith(new[] { "paraMarkIns.author", "paraMarkIns.date", "paraMarkIns.id" });
             var rpr = pProps.ParagraphMarkRunProperties
                       ?? pProps.AppendChild(new ParagraphMarkRunProperties());
+            // BUG-DUMP-R71-PARAMARK-INSDEL-ORDER: place via the schema-order
+            // helper, not PrependChild. When a paragraph mark carries BOTH ins
+            // and del (mark inserted by one reviewer, deleted by another), two
+            // blind prepends leave them in execution order (del ends up first);
+            // CT_ParaRPr requires ins before del. InsertRunPropInSchemaOrder
+            // seats each at its CT_ParaRPr slot regardless of application order.
             if (rpr.GetFirstChild<Inserted>() == null)
-                rpr.PrependChild(new Inserted
+                InsertRunPropInSchemaOrder(rpr, new Inserted
                 {
                     Author = string.IsNullOrEmpty(iA) ? "OfficeCLI" : iA!,
                     Date = ParseRev(iD),
@@ -989,7 +995,7 @@ public partial class WordHandler
             var rpr = pProps.ParagraphMarkRunProperties
                       ?? pProps.AppendChild(new ParagraphMarkRunProperties());
             if (rpr.GetFirstChild<Deleted>() == null)
-                rpr.PrependChild(new Deleted
+                InsertRunPropInSchemaOrder(rpr, new Deleted
                 {
                     Author = string.IsNullOrEmpty(dA) ? "OfficeCLI" : dA!,
                     Date = ParseRev(dD),

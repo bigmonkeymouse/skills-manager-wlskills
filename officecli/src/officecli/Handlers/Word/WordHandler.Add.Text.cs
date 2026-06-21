@@ -104,6 +104,18 @@ public partial class WordHandler
         // via Set inherit the run-level direction without a separate flag).
         // CONSISTENCY(rtl-cascade): mirrors SetElementParagraph — direction
         // is a paragraph-scope shorthand for "this paragraph is fully RTL".
+        // BUG-DUMP-MARKRPR-RTL-OVERSTAMP: when the dump forwards the whole ¶-mark
+        // <w:rPr> verbatim (markRPr.xml), that subtree is the authoritative mark —
+        // it already carries the source's exact mark-rtl state (present or absent).
+        // The direction=rtl / rtl=true convenience cascade below must NOT also
+        // inject <w:rtl/> into the mark, or a bidi paragraph whose source mark had
+        // no <w:rtl/> (only <w:lang w:bidi=…/>) gains a spurious mark rtl that
+        // changes the empty paragraph's line metrics and reflows the page. pPr
+        // <w:bidi/> is still set (it is the paragraph direction, separate from the
+        // mark and not carried in markRPr.xml). Mirrors the markRPrVerbatimApplied
+        // guard on the dotted markRPr.* keys further down.
+        bool hasVerbatimMarkRPr = properties.ContainsKey("markRPr.xml")
+            || properties.ContainsKey("markrpr.xml");
         bool? paraRtl = null;
         if (properties.TryGetValue("direction", out var dirRaw)
             || properties.TryGetValue("dir", out dirRaw)
@@ -112,9 +124,18 @@ public partial class WordHandler
             paraRtl = ParseDirectionRtl(dirRaw);
             if (paraRtl.Value)
             {
+                // direction/dir/bidi sets ONLY the paragraph-direction flag
+                // (pPr <w:bidi/>) — it must NOT inject <w:rtl/> into the ¶-mark
+                // rPr. The mark glyph's rtl is an independent property: a bidi
+                // paragraph whose source mark legitimately lacks <w:rtl/> (only
+                // <w:lang w:bidi=…/>) otherwise gained a spurious mark rtl on
+                // dump→batch replay, changing the empty paragraph's line metrics
+                // and reflowing the page below it. The dump always carries the
+                // mark's true rtl state explicitly (a dotted markRPr.rtl key or
+                // the verbatim markRPr.xml subtree), so the mark round-trips
+                // faithfully without this coupling. `rtl=true` below stays the
+                // explicit "make the mark rtl too" request.
                 pProps.BiDi = new BiDi();
-                var markRPr = pProps.ParagraphMarkRunProperties ?? pProps.AppendChild(new ParagraphMarkRunProperties());
-                ApplyRunFormatting(markRPr, "rtl", "true");
             }
             else
             {
@@ -149,8 +170,11 @@ public partial class WordHandler
         {
             paraRtl = true;
             pProps.BiDi = new BiDi();
-            var markRPr = pProps.ParagraphMarkRunProperties ?? pProps.AppendChild(new ParagraphMarkRunProperties());
-            ApplyRunFormatting(markRPr, "rtl", "true");
+            if (!hasVerbatimMarkRPr)
+            {
+                var markRPr = pProps.ParagraphMarkRunProperties ?? pProps.AppendChild(new ParagraphMarkRunProperties());
+                ApplyRunFormatting(markRPr, "rtl", "true");
+            }
         }
         // Complex-script run flags (bCs/iCs/szCs) hoisted above the text
         // block so an `add p --prop bold.cs=true` without explicit text
@@ -1571,9 +1595,14 @@ public partial class WordHandler
             // leads). Mirrors the paraMarkDel block below.
             var pMarkRPr3 = pProps.ParagraphMarkRunProperties
                           ?? pProps.AppendChild(new ParagraphMarkRunProperties());
+            // BUG-DUMP-R71-PARAMARK-INSDEL-ORDER: seat via schema-order helper,
+            // not PrependChild. A paragraph mark CAN carry both ins and del
+            // (inserted by one reviewer, later deleted by another); two blind
+            // prepends order them by execution (del first), but CT_ParaRPr
+            // requires ins before del. The helper places each correctly.
             if (pMarkRPr3.GetFirstChild<Inserted>() == null)
             {
-                pMarkRPr3.PrependChild(new Inserted
+                InsertRunPropInSchemaOrder(pMarkRPr3, new Inserted
                 {
                     Author = author,
                     Date = date,
@@ -1622,16 +1651,17 @@ public partial class WordHandler
             var pMarkRPr2 = pProps.ParagraphMarkRunProperties
                           ?? pProps.AppendChild(new ParagraphMarkRunProperties());
             // Don't double-emit if a Deleted element already lives here.
-            // Prepend (not append) the <w:del> within the rPr: in CT_ParaRPr the
-            // ins/del/move group leads the sequence, so when markRPr.* props
-            // (rFonts / sz / …) were already added to this rPr the del must
-            // precede them or Word rejects it as an unexpected child. A
-            // paragraph mark is never both inserted and deleted, so prepending
-            // del cannot mis-order it relative to an ins. Mirrors the paragraph-
-            // mark ins handling above.
+            // BUG-DUMP-R71-PARAMARK-INSDEL-ORDER: seat the <w:del> via the
+            // schema-order helper. CT_ParaRPr leads with the ins/del/move group,
+            // so del must precede any markRPr.* props (rFonts/sz/…) already in
+            // the rPr. The earlier assumption that a paragraph mark is "never
+            // both inserted and deleted" is false — real review chains delete a
+            // previously-inserted mark, leaving both ins (id A) and del (id B);
+            // blind prepend then puts del before ins, which CT_ParaRPr rejects.
+            // The helper orders ins-then-del regardless of application order.
             if (pMarkRPr2.GetFirstChild<Deleted>() == null)
             {
-                pMarkRPr2.PrependChild(new Deleted
+                InsertRunPropInSchemaOrder(pMarkRPr2, new Deleted
                 {
                     Author = author,
                     Date = date,
@@ -1787,6 +1817,26 @@ public partial class WordHandler
             void ApplyEqWrapperSpacing(Paragraph wp)
             {
                 if (properties == null) return;
+                // CONSISTENCY(verbatim-ppr-supersede): when the dump carried the
+                // whole wrapper <w:pPr> verbatim, restore it intact (spacing, jc,
+                // pStyle AND the paragraph-mark <w:rPr> that sets the equation
+                // line height). Re-applying only the granular spacing/jc keys
+                // dropped the mark rPr and shifted the line box. The verbatim
+                // pPr already contains bidi when the source had it, so the RTL
+                // cascade below only ever adds a missing one.
+                if (properties.TryGetValue("wrapperPpr", out var wpprXml)
+                    && !string.IsNullOrWhiteSpace(wpprXml)
+                    && wpprXml.Contains("pPr", StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        var restored = new ParagraphProperties(wpprXml);
+                        if (wp.ParagraphProperties != null) wp.ParagraphProperties.Remove();
+                        wp.PrependChild(restored);
+                        return;
+                    }
+                    catch { /* fall through to granular re-apply on malformed XML */ }
+                }
                 SpacingBetweenLines? EnsureSp()
                 {
                     var sp = wp.ParagraphProperties ??= new ParagraphProperties();
@@ -1805,6 +1855,24 @@ public partial class WordHandler
                     EnsureSp()!.Before = SpacingConverter.ParseWordSpacing(sbE).ToString();
                 if (properties.TryGetValue("spaceAfter", out var saE) || properties.TryGetValue("spaceafter", out saE))
                     EnsureSp()!.After = SpacingConverter.ParseWordSpacing(saE).ToString();
+                // BUG-DUMP-EQWRAP-JC: re-apply the wrapper paragraph's own
+                // justification (distinct from the math align). Schema order in
+                // CT_PPr is spacing < jc, and this runs before bidi/mark-rPr, so
+                // appending jc here is order-safe.
+                if (properties.TryGetValue("wrapperAlign", out var waE) && !string.IsNullOrWhiteSpace(waE))
+                {
+                    var jc = waE.Trim().ToLowerInvariant() switch
+                    {
+                        "justify" or "both" => "both",
+                        "center" => "center",
+                        "right" or "end" => "right",
+                        "left" or "start" => "left",
+                        _ => waE.Trim()
+                    };
+                    var pp = wp.ParagraphProperties ??= new ParagraphProperties();
+                    pp.Justification = new Justification { Val = new EnumValue<JustificationValues>(
+                        new JustificationValues(jc)) };
+                }
             }
 
             // BUG-DUMP19-02: apply m:oMathParaPr/m:jc when caller passes `align`
@@ -1933,6 +2001,14 @@ public partial class WordHandler
             }
             else
             {
+                // Cell display equation: the m:oMathPara is appended INTO the
+                // existing host paragraph (the cell paragraph), so that paragraph
+                // IS the wrapper. Re-apply its spacing/justification here — the
+                // new-wrapPara branches above never run for this case, so without
+                // this a cell equation lost its line height + jc, collapsing the
+                // line and drifting later content across page boundaries.
+                if (parent is Paragraph cellWrapPara)
+                    ApplyEqWrapperSpacing(cellWrapPara);
                 AppendToParent(parent, mathPara);
                 resultPath = $"{parentPath}/oMathPara[1]";
             }
@@ -2576,6 +2652,12 @@ public partial class WordHandler
             if (Core.TypedAttributeFallback.TrySet(newRProps, key, value)) continue;
             LastAddUnsupportedProps.Add(key);
         }
+
+        // BUG-DUMP-R71-RPR-ORDER: the run rPr was built across mixed paths
+        // (SDK setters, ApplyRunFormatting, raw AppendChild for rFonts/sz, and
+        // TypedAttributeFallback tail-appends), any of which can leave a child
+        // out of CT_RPr order. Normalize once now so the emitted run validates.
+        NormalizeRunPropsSchemaOrder(newRProps);
 
         // Use ChildElements for index lookup so ResolveAnchorPosition's
         // childElement-indexed result lines up. If index points at

@@ -34,6 +34,7 @@ from book_to_skill.utils import (
     main,
 )
 from book_to_skill.config import SUPPORTED_EXTENSIONS
+from book_to_skill.parsers.rtf import strip_rtf_fallback
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -858,6 +859,32 @@ class TestDocxExtraction:
         assert result["format"] == "docx"
         assert "DOCX test paragraph" in result["text"]
 
+    def test_extract_docx_xxe_rejection(self, tmp_path):
+        """Verify that a DOCX with malicious DTD or entity declarations is rejected."""
+        from book_to_skill.parsers.docx import extract_docx
+        
+        # Create a malicious DOCX
+        ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xml = textwrap.dedent(f"""\
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <!DOCTYPE w:document [
+              <!ENTITY xxe SYSTEM "file:///etc/passwd">
+            ]>
+            <w:document xmlns:w="{ns}">
+              <w:body>
+                <w:p><w:r><w:t>&xxe;</w:t></w:r></w:p>
+              </w:body>
+            </w:document>
+        """)
+        bad_docx = tmp_path / "malicious.docx"
+        with zipfile.ZipFile(bad_docx, "w") as zf:
+            zf.writestr("word/document.xml", xml)
+            zf.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+            
+        with pytest.raises(ExtractionError, match="Security validation failed"):
+            extract_docx(str(bad_docx))
+
+
 
 class TestResolveInputFiles:
     """Additional edge-case tests for resolve_input_files."""
@@ -943,9 +970,9 @@ class TestDependencyCheck:
 class TestParserExceptionLogging:
     """Verify unexpected parser exceptions surface on stderr, chain returns None."""
 
-    def test_pypdf2_warns_on_unexpected_error_and_returns_none(self, tmp_path, capsys):
-        """Monkeypatch pypdf2 import to raise; confirm None + stderr warning."""
-        from book_to_skill.parsers.pdf import extract_with_pypdf2
+    def test_pypdf_warns_on_unexpected_error_and_returns_none(self, tmp_path, capsys):
+        """Monkeypatch pypdf import to raise; confirm None + stderr warning."""
+        from book_to_skill.parsers.pdf import extract_with_pypdf
 
         broken = tmp_path / "broken.pdf"
         broken.write_bytes(b"%PDF-1.4 fake")
@@ -953,14 +980,56 @@ class TestParserExceptionLogging:
         real_import = __import__
 
         def fake_import(name, *args, **kwargs):
-            if name == "PyPDF2":
+            if name == "pypdf":
                 raise RuntimeError("simulated failure")
             return real_import(name, *args, **kwargs)
 
         with mock.patch("builtins.__import__", side_effect=fake_import):
-            result = extract_with_pypdf2(str(broken))
+            result = extract_with_pypdf(str(broken))
 
         assert result is None
         captured = capsys.readouterr()
         assert "[warn]" in captured.err
         assert "failed:" in captured.err
+
+
+class TestRtfUnicodeFallback:
+    """The dependency-free RTF fallback decodes RTF \\uN unicode escapes."""
+
+    _BS = chr(92)  # a single backslash, never written as a literal \-escape
+
+    def _esc(self, codepoint, fallback="?"):
+        # Build the RTF escape: backslash + "u" + number + one fallback char.
+        return self._BS + "u" + str(codepoint) + fallback
+
+    def test_rtf_unicode_right_single_quote(self):
+        assert strip_rtf_fallback("It" + self._esc(8217) + "s") == "It’s"
+
+    def test_rtf_unicode_em_dash(self):
+        assert strip_rtf_fallback("a " + self._esc(8212) + " b") == "a — b"
+
+    def test_rtf_unicode_accented_letter(self):
+        assert strip_rtf_fallback("caf" + self._esc(233)) == "caf\xe9"
+
+    def test_rtf_unicode_hex_fallback_consumed(self):
+        # The \uN escape's fallback here is a "\'92" hex byte — it is consumed.
+        text = "x" + self._BS + "u8217" + self._BS + "'92y"
+        assert strip_rtf_fallback(text) == "x’y"
+
+    def test_rtf_unicode_space_delimited_fallback(self):
+        text = "x" + self._BS + "u8217 ?y"
+        assert strip_rtf_fallback(text) == "x’y"
+
+    def test_rtf_unicode_negative_codepoint(self):
+        # RTF encodes code points > 32767 as negative 16-bit; -3 -> U+FFFD.
+        assert strip_rtf_fallback(self._esc(-3)) == "�"
+
+    def test_rtf_fallback_without_unicode_unchanged(self):
+        # Regression: control-word-only input is unaffected by the new step.
+        assert strip_rtf_fallback(self._BS + "b0 Bold" + self._BS + "b0 off") == "Boldoff"
+        assert strip_rtf_fallback("{" + self._BS + "rtf1 hi}") == "hi"
+
+    def test_rtf_unicode_consecutive_escapes_with_hex_fallback(self):
+        # Two adjacent \uN escapes, each with a \'XX hex fallback, decode cleanly.
+        text = self._BS + "u8220" + self._BS + "'93Hi" + self._BS + "u8221" + self._BS + "'94"
+        assert strip_rtf_fallback(text) == "“Hi”"

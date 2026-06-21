@@ -561,7 +561,11 @@ public partial class WordHandler
             // reflows. Absent → null → no wp14 child emitted.
             var sizeRelH = properties.GetValueOrDefault("sizeRelH");
             var sizeRelV = properties.GetValueOrDefault("sizeRelV");
-            imgRun = CreateAnchorImageRun(relId, cxEmu, cyEmu, altText, wrapType, hPos, vPos, hRel, vRel, behind, imgDocPropId, pictureName, hAlign, vAlign, relHeight, effectExtent, wrapDist, wrapPolygon, sizeRelH, sizeRelV);
+            // BUG-DUMP-WRAPSIDE: forward the wrapSquare text side (left/right/
+            // largest) so a one-sided wrap round-trips instead of defaulting to
+            // bothSides and reflowing the text around the float.
+            var wrapSide = properties.GetValueOrDefault("wrap.side") ?? properties.GetValueOrDefault("wrapSide");
+            imgRun = CreateAnchorImageRun(relId, cxEmu, cyEmu, altText, wrapType, hPos, vPos, hRel, vRel, behind, imgDocPropId, pictureName, hAlign, vAlign, relHeight, effectExtent, wrapDist, wrapPolygon, sizeRelH, sizeRelV, wrapSide);
         }
         else
         {
@@ -856,69 +860,28 @@ public partial class WordHandler
     // rels — and the run XML's r:id refs are rewritten to match. Child parts
     // keep their SOURCE rel ids: they are scoped to the freshly created parent
     // part, so the verbatim part bytes' internal refs resolve untouched.
-    private string AddActiveX(OpenXmlElement parent, string parentPath, Dictionary<string, string> properties)
-    {
-        properties ??= new Dictionary<string, string>();
-        if (!properties.TryGetValue("runXml", out var axMarker) || string.IsNullOrEmpty(axMarker)
-            || !axMarker.Contains("<w:control", StringComparison.Ordinal))
-            throw new ArgumentException("activex requires --prop runXml containing a <w:control> element");
-        return AddInlinedPartsRun(parent, parentPath, properties, "activex");
-    }
-
-    // SmartArt diagram run — same self-contained carrier as `add activex`:
-    // verbatim run XML (the <w:drawing> whose <dgm:relIds> references the
-    // data / layout / quickStyle / colors parts via r:dm/r:lo/r:qs/r:cs) plus
-    // part{N}.* payloads, including the data part's nested rendered-drawing
-    // child (diagramDrawing+xml, what Word actually rasterizes).
-    private string AddDiagram(OpenXmlElement parent, string parentPath, Dictionary<string, string> properties)
-    {
-        properties ??= new Dictionary<string, string>();
-        if (!properties.TryGetValue("runXml", out var dgMarker) || string.IsNullOrEmpty(dgMarker)
-            || !dgMarker.Contains("relIds", StringComparison.Ordinal))
-            throw new ArgumentException("diagram requires --prop runXml containing a <dgm:relIds> element");
-        return AddInlinedPartsRun(parent, parentPath, properties, "diagram");
-    }
-
-    // Native DrawingML chart run carried VERBATIM — supersedes the lossy typed
-    // `add chart` rebuild. The runXml is the run's <w:drawing> referencing
-    // <c:chart r:id>; part{N} payloads carry chart1.xml + its style / colors /
-    // themeOverride / userShapes / embedded-workbook children (and any external
-    // workbook relationship). Same self-contained carrier as `add diagram`.
-    private string AddChartVerbatim(OpenXmlElement parent, string parentPath, Dictionary<string, string> properties)
-    {
-        properties ??= new Dictionary<string, string>();
-        if (!properties.TryGetValue("runXml", out var cMarker) || string.IsNullOrEmpty(cMarker)
-            || !cMarker.Contains("c:chart", StringComparison.Ordinal))
-            throw new ArgumentException("chartpart requires --prop runXml containing a <c:chart> reference");
-        return AddInlinedPartsRun(parent, parentPath, properties, "chartpart");
-    }
-
-    // Legacy VML shape run (<w:pict>) — textboxes whose content carries
-    // hyperlinks (external rels) or v:imagedata image parts. Same carrier.
-    private string AddVmlShape(OpenXmlElement parent, string parentPath, Dictionary<string, string> properties)
-    {
-        properties ??= new Dictionary<string, string>();
-        if (!properties.TryGetValue("runXml", out var vmlMarker) || string.IsNullOrEmpty(vmlMarker)
-            || !vmlMarker.Contains("<w:pict", StringComparison.Ordinal))
-            throw new ArgumentException("vmlshape requires --prop runXml containing a <w:pict> element");
-        return AddInlinedPartsRun(parent, parentPath, properties, "vmlshape");
-    }
-
-    // Modern DrawingML shape run (<w:drawing> hosting wps:wsp) whose spPr /
-    // blipFill references image parts (a cover-page fern graphic). Same
-    // carrier; previously the emitter scrubbed the blipFill to a neutral
-    // solid fill and the bitmap was lost.
-    private string AddDrawingShape(OpenXmlElement parent, string parentPath, Dictionary<string, string> properties)
-    {
-        properties ??= new Dictionary<string, string>();
-        if (!properties.TryGetValue("runXml", out var dsMarker) || string.IsNullOrEmpty(dsMarker)
-            || !dsMarker.Contains("<w:drawing", StringComparison.Ordinal))
-            throw new ArgumentException("drawingshape requires --prop runXml containing a <w:drawing> element");
-        return AddInlinedPartsRun(parent, parentPath, properties, "drawingshape");
-    }
-
+    // Unified verbatim part-owning carrier (`add inlinedparts`) — supersedes the
+    // former per-element carrier verbs (chartpart / diagram / vmlshape /
+    // drawingshape / activex), which differed ONLY in a runXml marker check and
+    // all delegated here. The runXml is the verbatim run whose drawing/pict/control
+    // references its parts via r:id / r:dm / r:embed / ...; part{N}.* payloads carry
+    // every part the element owns (and their children + external rels). The element
+    // kind is self-evident from runXml + the part content types — CreateInlinedPart
+    // routes by content type, never by verb — so a single verb covers all of them.
+    // Used only by dump→batch (machine-produced); the old verb names stay accepted
+    // as input aliases. The marker check is now the union of the former per-verb ones.
     private string AddInlinedPartsRun(OpenXmlElement parent, string parentPath, Dictionary<string, string> properties, string opName)
     {
+        properties ??= new Dictionary<string, string>();
+        if (!properties.TryGetValue("runXml", out var marker) || string.IsNullOrEmpty(marker)
+            || !(marker.Contains("c:chart", StringComparison.Ordinal)
+                 || marker.Contains("relIds", StringComparison.Ordinal)
+                 || marker.Contains("<w:pict", StringComparison.Ordinal)
+                 || marker.Contains("<w:drawing", StringComparison.Ordinal)
+                 || marker.Contains("<w:control", StringComparison.Ordinal)))
+            throw new ArgumentException(
+                "inlinedparts requires --prop runXml containing a part-owning element "
+                + "(<c:chart>, <dgm:relIds>, <w:pict>, <w:drawing> or <w:control>)");
         var runXml = properties["runXml"];
         var mainPart = _doc.MainDocumentPart!;
         // CONSISTENCY(host-part-rel): same routing as AddOle — parts referenced
@@ -1384,10 +1347,30 @@ public partial class WordHandler
             : $"width:{cxPt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}pt;height:{cyPt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}pt";
         var oleAttr = hasFloatStyle ? "" : " o:ole=\"\"";
 
+        // BUG-DUMP-OLECROP: re-apply the VML <v:imagedata> crop rectangle captured
+        // by the dump ("cropleft:Nf;cropright:Nf;…"), splicing each present side
+        // back as a verbatim VML attribute so the preview round-trips cropped (an
+        // uncropped EMF preview renders larger and pushes later pages down).
+        var imageCropAttrs = "";
+        if (properties.TryGetValue("crop", out var oleCrop) && !string.IsNullOrEmpty(oleCrop))
+        {
+            var cropSb = new System.Text.StringBuilder();
+            foreach (var seg in oleCrop.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var kv = seg.Split(':', 2);
+                if (kv.Length != 2) continue;
+                var ck = kv[0].Trim().ToLowerInvariant();
+                if (ck is not ("cropleft" or "croptop" or "cropright" or "cropbottom")) continue;
+                cropSb.Append(' ').Append(ck).Append("=\"")
+                      .Append(System.Security.SecurityElement.Escape(kv[1].Trim())).Append('"');
+            }
+            imageCropAttrs = cropSb.ToString();
+        }
+
         var oleXml = $"""
 <w:object xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" w:dxaOrig="{cxTwips}" w:dyaOrig="{cyTwips}">
 {shapetypeXml}<v:shape id="{shapeId}" type="#_x0000_t75" style="{shapeStyleAttr}"{oleAttr}{shapeAltAttr}>
-<v:imagedata r:id="{iconRelId}" o:title=""/>
+<v:imagedata r:id="{iconRelId}" o:title=""{imageCropAttrs}/>
 </v:shape>
 <o:OLEObject Type="Embed" ProgID="{System.Security.SecurityElement.Escape(progId)}" ShapeID="{shapeId}" DrawAspect="{drawAspect}" ObjectID="{objectId}" r:id="{embedRelId}"/>
 </w:object>
@@ -1396,6 +1379,18 @@ public partial class WordHandler
 
         // 8. Wrap in a Run and insert it, mirroring the AddPicture positional logic.
         var oleRun = new Run(oleObject);
+
+        // BUG-DUMP-OLERPR: re-apply the source OLE run's <w:rPr> (forwarded by
+        // TryEmitOleRun). The run wrapping <w:object> can carry run typography —
+        // most visibly a <w:bdr> border box, also rFonts/sz that set the host
+        // line height — and a bare rebuilt run dropped it, nudging following
+        // lines and reflowing the page. Mirrors the breakRunRpr re-apply.
+        if (properties.TryGetValue("runRpr", out var oleRpr)
+            && !string.IsNullOrWhiteSpace(oleRpr)
+            && oleRpr.Contains("rPr", StringComparison.Ordinal))
+        {
+            try { oleRun.PrependChild(new RunProperties(oleRpr)); } catch { /* malformed: skip */ }
+        }
 
         // If the parent is a block-level SDT, insert into its SdtContentBlock
         // (creating it if missing) instead of appending directly to the SdtBlock.
@@ -1512,6 +1507,12 @@ public partial class WordHandler
             // for OLE, the only interesting target is the run itself.
             resultPath = $"{parentPath}/{BuildParaPathSegment(olePara, olePIdx)}/r[1]";
         }
+        // BUG-DUMP-DELOLE: preserve a tracked-change wrapper on the rebuilt OLE run
+        // (revision.type=del/ins/moveFrom/moveTo). Mirrors AddBreak — wrap after the
+        // result path is computed; no-op when no revision.type is present. A deleted
+        // figure that loses its <w:del> resurrects as a live full-size object and
+        // pushes the following content onto new pages.
+        WrapRunsInRevision(new List<Run> { oleRun }, properties);
         return resultPath;
     }
 }

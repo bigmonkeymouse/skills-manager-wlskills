@@ -318,6 +318,17 @@ public static partial class WordBatchEmitter
             && string.Equals(it.Type, kind, StringComparison.OrdinalIgnoreCase));
         if (emitted >= notes.Count) return;
 
+        // BUG-DUMP-NOTE-RAWREF-WONTOPEN: a note whose only reference lives inside
+        // a raw-emitted region (SDT carrier, verbatim field/textbox) is NOT an
+        // orphan — EmitNoteSpecialNotesFixup recovers it by emitting the whole
+        // notes part verbatim (fires only when no `add <kind>` ran, i.e.
+        // emitted == 0). Don't warn "dropped" for notes that path restores.
+        if (emitted == 0
+            && items.Any(it => it.Command == "raw-set"
+                && it.Xml != null
+                && it.Xml.Contains($"{kind}Reference", StringComparison.Ordinal)))
+            return;
+
         // The first `emitted` notes are the ones a reference recovered (Query
         // and the body walk both run in document order); the remainder are
         // orphans. Report each so its lost text is visible.
@@ -725,7 +736,23 @@ public static partial class WordBatchEmitter
                         // position rather than relocated by paragraph count.
                         if (child.Format.TryGetValue("_spanOpen", out var so)
                             && so is bool bso && bso)
+                        {
                             bmProps["open"] = "true";
+                            // BUG-DUMP-BMSDT-ID: a content-wrapping bookmark whose
+                            // matching <w:bookmarkEnd> lives INSIDE a following
+                            // <w:sdt> (e.g. a TOC heading bookmark before the TOC's
+                            // docPartObj SDT) keeps that end verbatim with its SOURCE
+                            // id when the SDT block is raw-set as one unit. The
+                            // open=true start is added separately, so it MUST reuse
+                            // the source id to pair with the verbatim end —
+                            // AddBookmark's BUG-DUMP-R47-5 branch honors `id` only for
+                            // open=true. Without it the start got a fresh id, left the
+                            // bookmark unclosed, and every PAGEREF/TOC entry to it
+                            // rendered "Error! Bookmark not defined."
+                            if (child.Format.TryGetValue("id", out var bkId)
+                                && bkId?.ToString() is { Length: > 0 } bkIdS)
+                                bmProps["id"] = bkIdS;
+                        }
                         else if (child.Format.TryGetValue("endPara", out var ep)
                             && ep != null && ep.ToString() is { Length: > 0 } eps && eps != "0")
                             bmProps["endPara"] = eps;

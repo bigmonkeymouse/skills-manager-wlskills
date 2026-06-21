@@ -385,6 +385,46 @@ public static partial class WordBatchEmitter
         if (string.IsNullOrEmpty(xml) || !xml.StartsWith("<")) return;
         xml = CanonicalizeRawXml(xml);
 
+        // BUG-DUMP-NOTE-RAWREF-WONTOPEN: the per-reference `add footnote`/`add
+        // endnote` body walk only fires for references the walk actually visits.
+        // When EVERY reference to a body note lives inside a raw-emitted region
+        // — an SDT content-control carrier, a verbatim field/textbox block —
+        // the walk never sees it, so NO `add <kind>` is emitted and the rebuild
+        // never creates the FootnotesPart/EndnotesPart. The raw region still
+        // carries the verbatim `<w:footnoteReference w:id="N"/>`, so the rebuilt
+        // body references a note id that does not exist → Word reports the file
+        // is corrupt and refuses to open. (The targeted per-note raw-sets below
+        // would also fail: their child XPath matches nothing in the missing
+        // part.) Recover by emitting the WHOLE notes part verbatim: RawSet on
+        // "/w:footnotes" lazily creates the part with the source's exact note
+        // bodies. Because nothing was added, no body renumbering happened, so
+        // every raw reference keeps its original id and resolves cleanly.
+        int emittedAdds = items.Count(it =>
+            it.Command == "add"
+            && string.Equals(it.Type, queryKind, StringComparison.OrdinalIgnoreCase));
+        if (emittedAdds == 0)
+        {
+            bool rawHasRef = items.Any(it =>
+                it.Command == "raw-set"
+                && it.Xml != null
+                && it.Xml.Contains($"{queryKind}Reference", StringComparison.Ordinal));
+            if (rawHasRef)
+            {
+                items.Add(new BatchItem
+                {
+                    Command = "raw-set",
+                    Part = semanticPart,
+                    Xpath = $"/w:{queryKind}s",
+                    Action = "replace",
+                    Xml = xml
+                });
+            }
+            // No `add <kind>` AND no raw reference → genuine orphan note bodies;
+            // WarnOrphanNotes already surfaced the drop. Either way the targeted
+            // per-note fixup below cannot run (no part to patch), so stop here.
+            return;
+        }
+
         System.Xml.Linq.XDocument doc;
         try { doc = System.Xml.Linq.XDocument.Parse(xml); }
         catch { return; }
@@ -3061,6 +3101,33 @@ public static partial class WordBatchEmitter
         }
     }
 
+    // BUG-DUMP-STYLE-TABS: render a style's pPr tab-stop list (the `tabs` Format
+    // value — IEnumerable<Dictionary>) into the POS[:ALIGN[:LEADER]] comma-joined
+    // shorthand that AddStyle's ApplyTabsShorthand consumes, so style tab stops
+    // round-trip on the `add style` op instead of via unresolvable per-stop
+    // `add tab parent=/styles/<id>` rows. Mirrors EmitTabStops' field reads.
+    internal static string BuildTabsShorthand(object? tabsVal)
+    {
+        if (tabsVal is not System.Collections.Generic.IEnumerable<Dictionary<string, object?>> list)
+            return "";
+        var segs = new List<string>();
+        foreach (var t in list)
+        {
+            if (!t.TryGetValue("pos", out var p) || p == null) continue;
+            var pos = p.ToString();
+            if (string.IsNullOrEmpty(pos)) continue;
+            var val = t.TryGetValue("val", out var v) && v != null ? v.ToString() ?? "" : "";
+            var leader = t.TryGetValue("leader", out var l) && l != null ? l.ToString() ?? "" : "";
+            // ApplyTabsShorthand defaults an empty ALIGN to left, so "pos::leader"
+            // is valid when a leader is present without an explicit alignment.
+            string seg = !string.IsNullOrEmpty(leader) ? $"{pos}:{val}:{leader}"
+                       : !string.IsNullOrEmpty(val) ? $"{pos}:{val}"
+                       : pos!;
+            segs.Add(seg);
+        }
+        return string.Join(",", segs);
+    }
+
     private static void EmitStyles(WordHandler word, List<BatchItem> items)
     {
         // Use query() rather than walking Get("/styles").Children — the
@@ -3141,6 +3208,21 @@ public static partial class WordBatchEmitter
             var emitId = props.GetValueOrDefault("id") ?? props.GetValueOrDefault("styleId");
             if (!string.IsNullOrEmpty(emitId) && !seenStyleIds.Add(emitId))
                 continue; // duplicate styleId — keep first, skip the rest (Word's behavior)
+            // BUG-DUMP-STYLE-TABS: a style's pPr tab stops must round-trip via the
+            // `tabs=` shorthand prop on the `add style` op — NOT as separate
+            // `add tab parent=/styles/<id>` rows. Unlike a paragraph (/body/p[N]
+            // resolves as a tab-add parent), `/styles/<id>` is not navigable for
+            // tab insertion, so the per-stop ops failed ("Path not found:
+            // /styles/TextBox") and the style's tab strip was dropped. AddStyle
+            // already consumes `tabs=` via ApplyTabsShorthand; build the shorthand
+            // here so FilterEmittableProps' drop of the (non-stringable) tabs list
+            // is compensated inline on the style op itself.
+            if (!props.ContainsKey("tabs") && !props.ContainsKey("tabstops")
+                && full.Format.TryGetValue("tabs", out var styleTabsForProp))
+            {
+                var tabsShorthand = BuildTabsShorthand(styleTabsForProp);
+                if (!string.IsNullOrEmpty(tabsShorthand)) props["tabs"] = tabsShorthand;
+            }
             // BUG-X6-03: built-in style ids (Normal / Heading1-9 / Title /
             // …) collide with the blank template's reservations on a
             // fresh batch target. AddStyle is now idempotent for those
@@ -3155,17 +3237,11 @@ public static partial class WordBatchEmitter
                 Type = "style",
                 Props = props
             });
-            // BUG-X4-T1: FilterEmittableProps drops the `tabs` scalar (it's a
-            // List<Dict>, not stringable). EmitParagraph compensates by
-            // emitting per-stop `add tab` rows; EmitStyles must do the same
-            // or paragraph-level custom tab stops on a style (Heading TOC
-            // leader tabs, etc.) silently disappear on round-trip.
-            var styleId = props.TryGetValue("id", out var sid) ? sid
-                : props.TryGetValue("styleId", out sid) ? sid : null;
-            if (styleId != null && full.Format.TryGetValue("tabs", out var styleTabs))
-            {
-                EmitTabStops($"/styles/{styleId}", styleTabs, items);
-            }
+            // BUG-X4-T1 / BUG-DUMP-STYLE-TABS: style tab stops are folded into the
+            // `tabs=` prop above (see comment at the seenStyleIds guard) — the old
+            // per-stop `add tab parent=/styles/<id>` emit failed to resolve and is
+            // retired for styles. (Paragraphs still use EmitTabStops via their own
+            // navigable /body/p[N] parent.)
             // STYLE-RAW-FALLBACK: if this style is a table style whose verbatim
             // XML we captured, replace the just-added <w:style> wholesale so
             // its tblPr / tblStylePr / shd / trPr / tcPr survive. Keyed by the
@@ -3197,14 +3273,22 @@ public static partial class WordBatchEmitter
     }
 
     // STYLE-RAW-FALLBACK helper: parse the source styles.xml once and return a
-    // map from styleId → verbatim <w:style> XML, restricted to TABLE styles
-    // (w:type="table"). Only table styles need this fallback today: their
-    // <w:tblPr>/<w:tblStylePr>/<w:shd>/<w:trPr>/<w:tcPr> formatting has no
-    // scalar Format representation, unlike paragraph/character styles whose
-    // pPr/rPr round-trips through the scalar emit path. Keeping the scope to
-    // table styles avoids re-clobbering the (correct) scalar emit for the far
-    // more numerous paragraph/character styles. The keying id is each style's
-    // own w:styleId — callers match it against the id the `add` step used.
+    // map from styleId → verbatim <w:style> XML, for ALL styles.
+    //
+    // Originally restricted to TABLE styles (whose tblPr/tblStylePr/shd/trPr/
+    // tcPr have no scalar Format representation). But the scalar emit also
+    // silently drops rPr/pPr children it has no key for — e.g. a paragraph
+    // style whose rPr carries <w:bdr> (a run border box): the dump emitted
+    // `shading=` from the sibling <w:shd> but no border key, so a Heading with
+    // a colored border box round-tripped as a plain filled heading, reflowing
+    // the whole document (SSIM 0.69). Rather than chase every missing rPr/pPr
+    // child key (the same hardcoded-allowlist class fixed verbatim for the ¶
+    // mark and docDefaults), round-trip EVERY style's <w:style> element
+    // verbatim. The scalar `add style` still runs first (creating the style +
+    // built-in id upsert / collision suffix); the raw-set then swaps it for the
+    // source's exact copy, so no scalar/raw drift and no dropped children. The
+    // keying id is each style's own w:styleId — callers match it against the id
+    // the `add` step used.
     private static Dictionary<string, string> BuildRawTableStyleMap(WordHandler word)
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -3218,8 +3302,6 @@ public static partial class WordBatchEmitter
             var wNs = (System.Xml.Linq.XNamespace)"http://schemas.openxmlformats.org/wordprocessingml/2006/main";
             foreach (var styleEl in doc.Root?.Elements(wNs + "style") ?? Enumerable.Empty<System.Xml.Linq.XElement>())
             {
-                var type = styleEl.Attribute(wNs + "type")?.Value;
-                if (!string.Equals(type, "table", StringComparison.Ordinal)) continue;
                 var idAttr = styleEl.Attribute(wNs + "styleId");
                 var styleId = idAttr?.Value;
                 if (string.IsNullOrEmpty(styleId)) continue;

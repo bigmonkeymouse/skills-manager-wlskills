@@ -1672,6 +1672,15 @@ public partial class WordHandler
             node.Format["colFirst"] = bkStart.ColumnFirst.Value.ToString();
         if (bkStart.ColumnLast?.Value != null)
             node.Format["colLast"] = bkStart.ColumnLast.Value.ToString();
+        // BUG-DUMP-BMDISPLACED: a bookmark adjacent to a custom-XML / SDT
+        // boundary (e.g. a TOC heading bookmark sitting just before the TOC's
+        // <w:sdt>) carries w:displacedByCustomXml ("next"/"prev") — it tells
+        // Word which side of the structured-tag the marker resolves to. Dropped
+        // on dump, the bookmark's position shifted across the SDT boundary and
+        // every PAGEREF/TOC entry referencing it rendered "Error! Bookmark not
+        // defined." Surface it so AddBookmark re-stamps the attribute.
+        if (bkStart.DisplacedByCustomXml is { InnerText: { Length: > 0 } dbcx })
+            node.Format["displacedByCustomXml"] = dbcx;
         var bkText = GetBookmarkText(bkStart);
         if (!string.IsNullOrEmpty(bkText))
             node.Text = bkText;
@@ -3663,11 +3672,11 @@ public partial class WordHandler
             {
                 if (pProps.SpacingBetweenLines.Before?.Value != null)
                 {
-                    node.Format["spaceBefore"] = SpacingConverter.FormatWordSpacing(pProps.SpacingBetweenLines.Before.Value);
+                    node.Format["spaceBefore"] = SpacingConverter.FormatWordSpacingNonNegative(pProps.SpacingBetweenLines.Before.Value);
                 }
                 if (pProps.SpacingBetweenLines.After?.Value != null)
                 {
-                    node.Format["spaceAfter"] = SpacingConverter.FormatWordSpacing(pProps.SpacingBetweenLines.After.Value);
+                    node.Format["spaceAfter"] = SpacingConverter.FormatWordSpacingNonNegative(pProps.SpacingBetweenLines.After.Value);
                 }
                 if (pProps.SpacingBetweenLines.Line?.Value != null)
                 {
@@ -4192,7 +4201,18 @@ public partial class WordHandler
         // the dotted form here too. The firstRun-fallback markRp branch is
         // narrowed (below) to fire only when NO runs exist at all, so the
         // two forms stay mutually exclusive (no DOUBLE).
-        var hasAnyRun = para.Elements<Run>().Any();
+        // BUG-DUMP-MARKRPR-HYPERLINK: count runs nested in hyperlinks/SDTs/
+        // smartTags too, not just direct-child runs. A cell paragraph whose
+        // sole content is a hyperlink (a language-link cell, "EN"/"SP", …) has
+        // NO direct <w:r> child, so hasAnyRun was false and the dotted markRPr.*
+        // block below was skipped — yet the firstRun-fallback also can't carry
+        // it (firstRun is null but the bare-key path is gated on !hasAnyRun via
+        // a still-direct-children check), so the ¶-mark <w:rPr> (the font/size
+        // that sets the cell line height) was dropped entirely on round-trip,
+        // collapsing the line and drifting the table. Descendants<Run> makes the
+        // dotted form fire so the mark rPr round-trips; the bare-key fallback
+        // (gated on its own !hasAnyRun below) stays off, so no DOUBLE emit.
+        var hasAnyRun = para.Descendants<Run>().Any();
         if (pmrpForDump != null && (hasTextRun || hasAnyRun))
         {
             var b = pmrpForDump.GetFirstChild<Bold>();
@@ -5145,9 +5165,34 @@ public partial class WordHandler
                 if (recoveredText.Length == 0 && inWrapper
                     && wrapperRunOrdinal >= 0 && wrapperRunOrdinal < rawWrapperTexts.Count)
                     recoveredText = rawWrapperTexts[wrapperRunOrdinal];
-                // Drop only when there is genuinely no text to carry. A
-                // whitespace-only run is meaningful and must be kept.
-                if (recoveredText.Length == 0) continue;
+                // BUG-DUMP-SMARTTAG-BR: a wrapper run whose only content is a
+                // <w:br/> / <w:cr/> (a line break between two nested smartTags —
+                // e.g. the <br/> separating "123 Main St." from "Olympia, WA" in
+                // a multi-line address) carries no text, so the recovery above
+                // left it empty. Dropping it (the bare continue below) joined the
+                // two lines and compressed the block, drifting the page.
+                // Synthesize a typed break node so the inline line break survives
+                // the wrapper flatten; insert it at the wrapper run's true
+                // document position like the text-run synth path does.
+                if (recoveredText.Length == 0)
+                {
+                    var brkSep = unkRun.ChildElements.FirstOrDefault(c =>
+                        c.NamespaceUri == wNs && (c.LocalName == "br" || c.LocalName == "cr"));
+                    if (brkSep != null)
+                    {
+                        var brkNode = new DocumentNode { Type = "break", Path = $"{path}/r[{runIdx + 1}]" };
+                        var brkT = brkSep.GetAttributes()
+                            .FirstOrDefault(a => a.LocalName == "type" && a.NamespaceUri == wNs).Value;
+                        brkNode.Format["breakType"] = string.IsNullOrEmpty(brkT) ? "line" : brkT;
+                        var brkPos = descendantPos.TryGetValue(unkRun, out var bp) ? bp : int.MaxValue;
+                        int brkIdx = childPositions.FindIndex(cp => cp > brkPos);
+                        if (brkIdx < 0) brkIdx = node.Children.Count;
+                        node.Children.Insert(brkIdx, brkNode);
+                        childPositions.Insert(brkIdx, brkPos);
+                        runIdx++;
+                    }
+                    continue;
+                }
                 var synthNode = new DocumentNode
                 {
                     Type = "run",
@@ -5271,6 +5316,24 @@ public partial class WordHandler
             {
                 node.Children.Add(ElementToNode(sdtR, $"{path}/sdt[{sdtRunIdx + 1}]", depth - 1));
                 sdtRunIdx++;
+            }
+            // BUG-DUMP-BARE-BR: a <w:br/> / <w:cr/> that is a DIRECT child of
+            // <w:p> (not wrapped in a <w:r>) is schema-invalid, so the SDK loads
+            // it as an OpenXmlUnknownElement rather than a typed Break — and Word
+            // still renders the line break. The run walk above only enumerates
+            // <w:r> children, so these bare breaks were dropped, merging the lines
+            // on round-trip. Surface each as a typed break node (mirroring the
+            // smartTag-wrapped bare-break path) so the emitter replays it.
+            foreach (var bareBr in para.ChildElements)
+            {
+                if (bareBr.NamespaceUri != wNs ||
+                    (bareBr.LocalName != "br" && bareBr.LocalName != "cr"))
+                    continue;
+                var bareBrNode = new DocumentNode { Type = "break", Path = $"{path}/r[{node.Children.Count + 1}]" };
+                var bbType = bareBr.GetAttributes()
+                    .FirstOrDefault(a => a.LocalName == "type" && a.NamespaceUri == wNs).Value;
+                bareBrNode.Format["breakType"] = string.IsNullOrEmpty(bbType) ? "line" : bbType;
+                node.Children.Add(bareBrNode);
             }
             // BUG-DUMP7-03 / BUG-DUMP8-03 / BUG-DUMP9-04: inline <m:oMath>
             // children (including those nested inside w:ins/w:del/w:hyperlink
@@ -5409,18 +5472,32 @@ public partial class WordHandler
             // compressing the page and drifting later content across boundaries.
             // Forward the wrapper pPr spacing so TryEmitDisplayEquation + AddEquation
             // can re-apply it to the rebuilt wrapper paragraph.
-            if (element.Parent is Paragraph eqWrapP
-                && eqWrapP.ParagraphProperties?.SpacingBetweenLines is { } eqSp)
+            if (element.Parent is Paragraph eqWrapP && eqWrapP.ParagraphProperties is { } eqWrapPpr)
             {
-                if (eqSp.Before?.Value != null)
-                    node.Format["spaceBefore"] = SpacingConverter.FormatWordSpacing(eqSp.Before.Value);
-                if (eqSp.After?.Value != null)
-                    node.Format["spaceAfter"] = SpacingConverter.FormatWordSpacing(eqSp.After.Value);
-                if (eqSp.Line?.Value != null)
-                    node.Format["lineSpacing"] = SpacingConverter.FormatWordLineSpacing(
-                        eqSp.Line.Value, eqSp.LineRule?.InnerText);
-                if (eqSp.LineRule?.HasValue == true)
-                    node.Format["lineRule"] = eqSp.LineRule.InnerText;
+                // Granular spacing keys are kept for human-readable round-trips
+                // and back-compat, but the wrapper paragraph also carries a
+                // paragraph-mark <w:rPr> (font on the ¶ mark) and pStyle that
+                // co-determine the equation line's height. Re-applying only
+                // spacing+jc while dropping the mark rPr changed the line box and
+                // drifted pagination WORSE than dropping pPr entirely. Carry the
+                // whole pPr verbatim so AddEquation can restore it intact
+                // (CONSISTENCY(verbatim-ppr-supersede): same pattern as chart
+                // spPr / paragraph pPr verbatim round-trips).
+                node.Format["wrapperPpr"] = eqWrapPpr.OuterXml;
+                if (eqWrapPpr.SpacingBetweenLines is { } eqSp)
+                {
+                    if (eqSp.Before?.Value != null)
+                        node.Format["spaceBefore"] = SpacingConverter.FormatWordSpacing(eqSp.Before.Value);
+                    if (eqSp.After?.Value != null)
+                        node.Format["spaceAfter"] = SpacingConverter.FormatWordSpacing(eqSp.After.Value);
+                    if (eqSp.Line?.Value != null)
+                        node.Format["lineSpacing"] = SpacingConverter.FormatWordLineSpacing(
+                            eqSp.Line.Value, eqSp.LineRule?.InnerText);
+                    if (eqSp.LineRule?.HasValue == true)
+                        node.Format["lineRule"] = eqSp.LineRule.InnerText;
+                }
+                if (eqWrapPpr.Justification?.Val?.InnerText is { Length: > 0 } eqWrapJc)
+                    node.Format["wrapperAlign"] = eqWrapJc == "both" ? "justify" : eqWrapJc;
             }
             // Extract LaTeX via FormulaParser
             var oMath = element.Descendants<M.OfficeMath>().FirstOrDefault();

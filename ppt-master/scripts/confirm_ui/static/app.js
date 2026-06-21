@@ -2,7 +2,7 @@
  * Finite/enumerable fields (canvas, mode, visual style, icons, image usage,
  * AI source, formula policy, generation mode) list ALL options from
  * /static/catalogs.json with the AI's recommendation marked. Open/generative
- * fields (color, typography, generated-image style) show a few AI candidates. Open fields also expose
+ * fields (color, typography, generated-image style) show >=3 AI candidates. Open fields also expose
  * Custom controls. On confirm the page saves result.json and closes.
  */
 (function () {
@@ -32,6 +32,8 @@
             sec_refine: "Refine spec first",
             sub_mode: "Narrative mode",
             sub_visual: "Visual style",
+            sub_divergence: "Material divergence (how freely to reshape vs. stay close to the source)",
+            placeholder_divergence: "In your words — e.g. \"stick closely to the document\" / \"freely restructure and expand within the source\". Leave blank for a balanced default.",
             custom: "Custom",
             custom_placeholder: "Type your own…",
             recommended: "Recommended",
@@ -55,6 +57,8 @@
             body_size_hint_canvas: "This canvas suggests ~{lo}–{hi}px (scales with canvas height).",
             custom_typography: "Custom typography",
             custom_typography_placeholder: "Type your font plan, e.g. Heading: Georgia + KaiTi; Body: Microsoft YaHei + Arial…",
+            custom_color: "Custom color",
+            custom_color_placeholder: "Describe your colors in words, e.g. deep navy primary, warm orange accent, white background — or paste HEX values…",
             role_background: "bg",
             role_secondary_bg: "2nd bg",
             role_primary: "primary",
@@ -98,6 +102,8 @@
             sec_refine: "先精修设计规范",
             sub_mode: "叙事模式",
             sub_visual: "视觉风格",
+            sub_divergence: "材料发散度（多大程度重塑，还是贴近源材料）",
+            placeholder_divergence: "用你自己的话写，例如「严格贴着文档来」/「在源材料范围内自由重组并展开」。留空则按平衡处理。",
             custom: "自定义",
             custom_placeholder: "输入自定义内容…",
             recommended: "推荐",
@@ -121,6 +127,8 @@
             body_size_hint_canvas: "当前画布建议 ~{lo}–{hi}px（随画布高度缩放）。",
             custom_typography: "自定义字体方案",
             custom_typography_placeholder: "输入字体方案，如：标题用楷体；正文用微软雅黑…",
+            custom_color: "自定义配色",
+            custom_color_placeholder: "用文字描述配色，如：深蓝主色、暖橙强调、白色背景——或直接粘贴 HEX 值…",
             role_background: "背景",
             role_secondary_bg: "次级背景",
             role_primary: "主色",
@@ -283,6 +291,14 @@
         var grouped = list.length && list[0] && list[0].items;
         var flat = grouped ? list.reduce(function (a, g) { return a.concat(g.items || []); }, []) : list;
         var ids = flat.map(function (o) { return o.id; });
+        // Optional personality spectrum: instead of a single ★ recommendation,
+        // the AI marks a few catalog ids (safe / shifted / bold) each with a
+        // temperament tag + a real-world analogy note. Replaces the single badge.
+        var spectrum = (opts2.spectrum && opts2.spectrum.length) ? opts2.spectrum : null;
+        var specById = {};
+        if (spectrum) spectrum.forEach(function (s) {
+            if (s && s.id) specById[s.id] = { tag: localized(s, "tag"), note: localized(s, "note") };
+        });
         var allowCustom = opts2.allowCustom === true;  // only for fields not fully enumerable
         var customSentinel = opts2.customSentinel || "";
         var customInvalidValues = opts2.customInvalidValues || [];
@@ -308,9 +324,15 @@
             if (o.dim) label += " · " + o.dim;
             var desc = optionDesc(o);
             if (desc) label += (LANG === "zh" ? "：" : " — ") + desc;
+            var spec = specById[o.id];
+            if (spec && spec.note) label += " · " + spec.note;
             var chip = el("div", "chip");
             chip.appendChild(el("span", "chip-text", label));
-            if (o.id === recommendedId) {
+            if (spec) {
+                // spectrum pick: badge shows its temperament tag, not the generic ★
+                chip.classList.add("recommended");
+                chip.appendChild(el("span", "rec-badge", "★ " + (spec.tag || t("recommended"))));
+            } else if (!spectrum && o.id === recommendedId) {
                 chip.classList.add("recommended");
                 chip.appendChild(el("span", "rec-badge", "★ " + t("recommended")));
             }
@@ -490,6 +512,15 @@
         var sec = section(3, "sec_audience");
         textField(sec, function () { return STATE.audience; },
             function (v) { STATE.audience = v; }, "placeholder_audience", false);
+        // Material divergence — a distinct, free-text sub-question inside §c, shown
+        // right under the audience box: the user states in their own words how
+        // closely to follow the source vs. how freely to reshape it. Free prose, not
+        // fixed options; no page-count coupling, no source-signal recommendation.
+        var subDiv = el("div", "subfield");
+        subDiv.appendChild(el("div", "subfield-label", t("sub_divergence")));
+        textField(subDiv, function () { return STATE.content_divergence; },
+            function (v) { STATE.content_divergence = v; }, "placeholder_divergence", false);
+        sec.appendChild(subDiv);
         host.appendChild(sec);
     }
 
@@ -501,7 +532,8 @@
         var sub2 = el("div", "subfield");
         sub2.appendChild(el("div", "subfield-label", t("sub_visual")));
         enumField(sub2, CAT.visual_styles, recOrFirst("visual_style", CAT.visual_styles),
-            function () { return STATE.visual_style; }, function (v) { STATE.visual_style = v; }, { allowCustom: true });
+            function () { return STATE.visual_style; }, function (v) { STATE.visual_style = v; },
+            { allowCustom: true, spectrum: REC && REC.visual_style_spectrum });
         sec.appendChild(sub2);
         host.appendChild(sec);
     }
@@ -559,12 +591,28 @@
                 if (hexSwatches[role]) paintSwatch(hexSwatches[role], pal[role]);
             });
         }
+        var customInput = el("textarea", "text-input custom-color-input");
+        customInput.rows = 2;
+        customInput.placeholder = t("custom_color_placeholder");
+        customInput.style.display = "none";
+
         function selectCard(idx) {
             var c = cands[idx] || {};
             selectedIdx = idx;
             STATE.color = { name: c.name || "", palette: Object.assign({}, normPalette(c)) };
             grid.querySelectorAll(".color-card").forEach(function (card, i) { card.classList.toggle("selected", i === idx); });
+            customInput.style.display = "none";
             applyHexInputs(STATE.color.palette);
+            refreshStylePreview();
+        }
+
+        function selectCustomColor() {
+            selectedIdx = -1;
+            STATE.color = { name: "custom", custom: customInput.value || "", palette: {} };
+            grid.querySelectorAll(".color-card").forEach(function (card) { card.classList.remove("selected"); });
+            customCard.classList.add("selected");
+            customInput.style.display = "block";
+            customInput.focus();
             refreshStylePreview();
         }
 
@@ -588,7 +636,17 @@
             card.addEventListener("click", function () { selectCard(idx); });
             grid.appendChild(card);
         });
+        var customCard = el("div", "color-card color-card-custom");
+        customCard.appendChild(el("div", "color-name", t("custom_color")));
+        customCard.addEventListener("click", selectCustomColor);
+        grid.appendChild(customCard);
         sec.appendChild(grid);
+        customInput.addEventListener("input", function () {
+            if (!STATE.color || STATE.color.name !== "custom") selectCustomColor();
+            STATE.color.custom = customInput.value;
+            refreshStylePreview();
+        });
+        sec.appendChild(customInput);
 
         var override = el("div", "hex-override");
         override.appendChild(el("div", "subfield-label", t("hex_override")));
@@ -622,9 +680,17 @@
         host.appendChild(sec);
 
         var selIdx = -1;
-        if (STATE.color && STATE.color.name) cands.forEach(function (c, i) { if (c.name === STATE.color.name) selIdx = i; });
-        if (selIdx >= 0) selectCard(selIdx);
-        else applyHexInputs((STATE.color && STATE.color.palette) || {});
+        if (STATE.color && STATE.color.name && STATE.color.name !== "custom") {
+            cands.forEach(function (c, i) { if (c.name === STATE.color.name) selIdx = i; });
+        }
+        if (STATE.color && STATE.color.name === "custom") {
+            customInput.value = STATE.color.custom || "";
+            selectCustomColor();
+        } else if (selIdx >= 0) {
+            selectCard(selIdx);
+        } else {
+            applyHexInputs((STATE.color && STATE.color.palette) || {});
+        }
     }
 
     function renderIcons(host) {
@@ -993,6 +1059,7 @@
         STATE.canvas = pick("canvas", CAT.canvas);
         STATE.page_count = (REC.page_count && REC.page_count.value != null) ? String(REC.page_count.value) : "";
         STATE.audience = (REC.audience && REC.audience.value) || "";
+        STATE.content_divergence = (REC.content_divergence && REC.content_divergence.value) || "";  // free text; blank = balanced default
         STATE.mode = pick("mode", CAT.modes);
         STATE.visual_style = pick("visual_style", CAT.visual_styles);
 
