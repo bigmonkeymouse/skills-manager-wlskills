@@ -137,7 +137,11 @@ public static partial class WordBatchEmitter
             .Select(e => e.Format["ffName"]?.ToString() ?? "")
             .Where(n => !string.IsNullOrEmpty(n))
             .ToHashSet(StringComparer.Ordinal);
-        if (formFieldNames.Count > 0)
+        // Gate on ANY form field, not only named ones: a paragraph holding only
+        // nameless fields still needs the noBookmark pin pass below, else each
+        // nameless field gains a fabricated ff_<guid> bookmark on rebuild
+        // (BUG-DUMP-R72-FF-BOOKMARK-COUNT).
+        if (fieldEntries.Any(e => e.Type == "formfield"))
         {
             // BUG-DUMP-FFCHECKBOX-BOOKMARK: a form field whose SOURCE had no
             // wrapping bookmark must NOT gain a fabricated one on rebuild.
@@ -156,11 +160,45 @@ public static partial class WordBatchEmitter
                     && e.Format.TryGetValue("name", out var bnm) && bnm != null)
                 .Select(e => e.Format["name"]!.ToString() ?? "")
                 .ToHashSet(StringComparer.Ordinal);
-            foreach (var ffSynth in fieldEntries.Where(e => e.Type == "formfield"
-                         && e.Format.TryGetValue("ffName", out _)))
+            // BUG-DUMP-FF-ROWLEVEL-BOOKMARK / BUG-DUMP-R72-FF-BOOKMARK-COUNT: a
+            // form field's wrapping bookmark may sit at ROW level (a <w:tr> child
+            // between cells) — invisible to the same-paragraph set, and dropped by
+            // the table emitter — so pinning noBookmark purely on the same-paragraph
+            // check would erase every row-level bookmark. The earlier fix consulted
+            // a document-wide NAME SET ("does any bookmark with this name exist?"),
+            // but that over-fires when many fields share one name: a doc with ONE
+            // <w:bookmarkStart name="Check1"> and 26 checkbox fields all named
+            // "Check1" then recreated 26 Check1 bookmarks (+a uniquify cascade).
+            // Use a count-aware BUDGET instead: each name may hand out only as many
+            // wrapping bookmarks as the source actually had. A same-paragraph match
+            // is a real bookmark, so it always recreates AND reserves one budget
+            // unit; a field with no same-paragraph bookmark keeps one only while the
+            // remaining budget (row-level / other-paragraph source bookmarks) lasts;
+            // an unnamed field — which cannot carry a named bookmark — and a field
+            // whose budget is exhausted are pinned noBookmark.
+            foreach (var ffSynth in fieldEntries.Where(e => e.Type == "formfield"))
             {
-                var ffn = ffSynth.Format["ffName"]?.ToString() ?? "";
-                if (!string.IsNullOrEmpty(ffn) && !bookmarkNamesPresent.Contains(ffn))
+                var ffn = ffSynth.Format.TryGetValue("ffName", out var ffnObj)
+                    ? (ffnObj?.ToString() ?? "")
+                    : "";
+                if (string.IsNullOrEmpty(ffn))
+                {
+                    // A nameless source field had no wrapping bookmark (a bookmark
+                    // needs a name), yet AddFormField would auto-generate an
+                    // ff_<guid> name + bookmark for it (the interactive default).
+                    // Pin noBookmark on round-trip so a bookmark-less field stays
+                    // bookmark-less instead of gaining a fabricated ff_<guid> one.
+                    ffSynth.Format["_noBookmark"] = true;
+                    continue;
+                }
+                if (bookmarkNamesPresent.Contains(ffn))
+                {
+                    // Real same-paragraph wrapping bookmark: always recreate, but
+                    // reserve its budget so a later same-named field can't reuse it.
+                    ctx?.ConsumeBookmarkBudget(word, ffn);
+                    continue;
+                }
+                if (ctx == null || !ctx.ConsumeBookmarkBudget(word, ffn))
                     ffSynth.Format["_noBookmark"] = true;
             }
             if (ctx != null)
@@ -3831,6 +3869,17 @@ public static partial class WordBatchEmitter
                 props[$"part{pi}.child{ci}.relId"] = child.RelId;
                 props[$"part{pi}.child{ci}.data"] =
                     $"data:{child.ContentType};base64,{Convert.ToBase64String(child.Bytes)}";
+                // BUG-DUMP-R71-USERSHAPES-IMG: a child can own further parts (a
+                // chart userShapes drawing -> its image). Emit that grandchild
+                // level so the drawing's r:embed isn't left dangling on replay.
+                int gi = 0;
+                foreach (var gc in child.Children)
+                {
+                    gi++;
+                    props[$"part{pi}.child{ci}.gc{gi}.relId"] = gc.RelId;
+                    props[$"part{pi}.child{ci}.gc{gi}.data"] =
+                        $"data:{gc.ContentType};base64,{Convert.ToBase64String(gc.Bytes)}";
+                }
             }
             // Per-part external rels (e.g. a chart's <c:externalData r:id> ->
             // external oleObject workbook). Recreated on the part itself, with

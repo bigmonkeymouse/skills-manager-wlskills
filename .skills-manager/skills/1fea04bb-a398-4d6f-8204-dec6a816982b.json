@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "1fea04bb-a398-4d6f-8204-dec6a816982b",
+  "path": "ppt-classify",
+  "path_key": "ppt-classify",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/crazynomad/skills.git",
+    "subpath": "ppt-classify",
+    "branch": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "710d80b2-c428-4808-85bc-895ed37611d5",
+  "path": "ppt-narrative-review",
+  "path_key": "ppt-narrative-review",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "git",
+    "ref": "https://github.com/crazynomad/skills.git",
+    "subpath": "ppt-narrative-review",
+    "branch": null
+  }
+}
