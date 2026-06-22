@@ -2012,8 +2012,18 @@ public static partial class WordBatchEmitter
                     // rather than the content).
                     var srcHlPath = run.Path.Substring(0, idxEq); // …/hyperlink[K]
                     var hlSeg = derived.Substring(hlIdx); // /hyperlink[K]
-                    int alreadyEmitted = items.Count(it => it.Type == "hyperlink"
-                        && string.Equals(it.Parent, paraTargetPath, StringComparison.Ordinal));
+                    // BUG-DUMP-FIELDHL-XPARA: count hyperlink rows since THIS
+                    // paragraph's own `add p` — paraTargetPath ("/…/p[last()]") is
+                    // shared by every paragraph, so a global count let an earlier
+                    // paragraph's hyperlink suppress the missing-hyperlink emit here
+                    // and route the equation to a non-existent /hyperlink[K].
+                    int eqLastParaAdd = items.FindLastIndex(it =>
+                        it.Command == "add" && it.Type == "p");
+                    int alreadyEmitted = 0;
+                    for (int hi = eqLastParaAdd + 1; hi < items.Count; hi++)
+                        if (items[hi].Type == "hyperlink"
+                            && string.Equals(items[hi].Parent, paraTargetPath, StringComparison.Ordinal))
+                            alreadyEmitted++;
                     var rebasedHl = paraTargetPath + hlSeg;
                     int wantK = 0;
                     var kStr = hlSeg.Length > 11 ? hlSeg[11..^1] : "";
@@ -2513,8 +2523,25 @@ public static partial class WordBatchEmitter
                     {
                         var rebased = paraTargetPath
                             + candidateHlParent.Substring(hlIdxStart);
-                        int emittedHls = items.Count(it => it.Type == "hyperlink"
-                            && string.Equals(it.Parent, paraTargetPath, StringComparison.Ordinal));
+                        // BUG-DUMP-FIELDHL-XPARA: paraTargetPath is the literal
+                        // "/…/p[last()]" — IDENTICAL for every paragraph (dump always
+                        // targets the most-recently-added p). Counting hyperlink rows
+                        // by Parent==paraTargetPath therefore tallied hyperlinks from
+                        // ALL prior paragraphs, so a field-ONLY hyperlink (no separate
+                        // display run → no `add hyperlink` row of its own) inherited a
+                        // phantom "hyperlink exists" from an unrelated earlier
+                        // paragraph and routed the field to /hyperlink[1] that doesn't
+                        // exist in THIS paragraph — "Path not found" on replay dropped
+                        // the whole REF/PAGEREF field and its visible text. Count only
+                        // hyperlink rows emitted SINCE the current paragraph's own
+                        // `add p` boundary so the tally is paragraph-local.
+                        int lastParaAdd = items.FindLastIndex(it =>
+                            it.Command == "add" && it.Type == "p");
+                        int emittedHls = 0;
+                        for (int hi = lastParaAdd + 1; hi < items.Count; hi++)
+                            if (items[hi].Type == "hyperlink"
+                                && string.Equals(items[hi].Parent, paraTargetPath, StringComparison.Ordinal))
+                                emittedHls++;
                         if (emittedHls >= kIdx)
                             fldParent = rebased;
                     }
@@ -2640,6 +2667,31 @@ public static partial class WordBatchEmitter
                 });
                 return true;
             }
+            // BUG-DUMP-WPG-GROUP: an mc:AlternateContent-wrapped DrawingML group
+            // (<wpg:wgp> group of pictures) or shape surfaces as a plain "run"
+            // node — the Drawing lives inside the AltContent so there is no typed
+            // picture node, the no-rel raw-set above skipped it (its blips carry
+            // r:embed), and it is a <w:drawing> not a <w:pict> so the VML carrier
+            // skipped it too. It then fell into the warn-drop below and the WHOLE
+            // group (every nested image) vanished. Ship it through the inlined-
+            // parts carrier: GetDrawingShapeEmitData inlines every referenced
+            // image part and rewrites the rel ids on replay, so the group drawing
+            // round-trips verbatim. Mirrors the wps:wsp shape carrier in the
+            // type=="picture" branch below. GuardCarrierContentTypes returns null
+            // for a drawing referencing an unsupported part (a chart, …), so those
+            // correctly fall through to the warn-drop instead of being mis-routed.
+            if (probeXml.Contains("<w:drawing", StringComparison.Ordinal)
+                && word.GetDrawingShapeEmitData(run.Path) is { } grpData)
+            {
+                items.Add(new BatchItem
+                {
+                    Command = "add",
+                    Parent = sharedAttachPara ?? paraTargetPath,
+                    Type = "inlinedparts",
+                    Props = PackInlinedPartsProps(grpData),
+                });
+                return true;
+            }
             // Drawing-bearing but not safely raw-set-able inline (lives in a
             // header/footer/cell, or carries an external relationship we can't
             // re-anchor). Flag the loss rather than silently dropping it.
@@ -2661,6 +2713,28 @@ public static partial class WordBatchEmitter
         // non-textbox-shape raw-set convention.
         {
             var shapeXml = word.GetElementXml(run.Path);
+            // BUG-DUMP-WPG-GROUP: a DrawingML GROUP (<wpg:wgp> — multiple pictures/
+            // shapes grouped, often mc:AlternateContent-wrapped) surfaces as
+            // type="picture" because GetImageBinary finds the FIRST nested blip.
+            // The picture path below would flatten the whole group to that single
+            // <pic:pic>, dropping every other grouped image AND the group structure.
+            // Route the group through the inlined-parts carrier instead, so all
+            // nested image parts + the verbatim group drawing round-trip. Mirrors
+            // the wps:wsp shape carrier just below; GuardCarrierContentTypes nulls
+            // out a group referencing an unsupported part so it falls through.
+            if (!string.IsNullOrEmpty(shapeXml)
+                && shapeXml.Contains("<wpg:wgp", StringComparison.Ordinal)
+                && word.GetDrawingShapeEmitData(run.Path) is { } wpgData)
+            {
+                items.Add(new BatchItem
+                {
+                    Command = "add",
+                    Parent = sharedAttachPara ?? paraTargetPath,
+                    Type = "inlinedparts",
+                    Props = PackInlinedPartsProps(wpgData),
+                });
+                return true;
+            }
             if (!string.IsNullOrEmpty(shapeXml)
                 && IsWpsShapeDrawing(shapeXml)
                 && ctx != null
@@ -3368,6 +3442,31 @@ public static partial class WordBatchEmitter
                 });
                 return true;
             }
+        }
+
+        // BUG-DUMP-TEXTBOX-IMG: a MODERN DrawingML textbox shape (wps:wsp +
+        // txbxContent, often mc:AlternateContent/wpg-wrapped — e.g. a letterhead
+        // shape pairing a caption box with a logo) that ALSO carries an embedded
+        // picture (<a:blip r:embed>) loses that image on the typed `add textbox`
+        // path below, which extracts only geometry + text. The image binary then
+        // vanishes from the rebuild (this is the wpg-group image-loss class: a
+        // page of grouped letterhead shapes silently dropping their logos). Route
+        // such a shape through the inlined-parts carrier so the embedded image
+        // part + verbatim shape XML (box + text + picture) round-trip, mirroring
+        // the VML carrier above. Plain textboxes (no embedded image) keep the
+        // typed `add textbox` path so they stay cleanly editable.
+        if (rawXml.Contains("r:embed", StringComparison.Ordinal)
+            && (attachParaPath ?? paraTargetPath) is { } tbImgParent
+            && word.GetDrawingShapeEmitData(run.Path) is { } tbImgData)
+        {
+            items.Add(new BatchItem
+            {
+                Command = "add",
+                Parent = tbImgParent,
+                Type = "inlinedparts",
+                Props = PackInlinedPartsProps(tbImgData),
+            });
+            return true;
         }
 
         // Only emit a typed `add textbox` for hosts AddTextbox itself
@@ -4382,8 +4481,18 @@ public static partial class WordBatchEmitter
             hlEnd - hlIdxStart - hlMarker.Length);
         if (!int.TryParse(kStr, out var kIdx)) return paraTargetPath;
         var rebased = paraTargetPath + candidateHlParent.Substring(hlIdxStart);
-        int emittedHls = items.Count(it => it.Type == "hyperlink"
-            && string.Equals(it.Parent, paraTargetPath, StringComparison.Ordinal));
+        // BUG-DUMP-FIELDHL-XPARA: paraTargetPath ("/…/p[last()]") is identical for
+        // every paragraph, so counting hyperlink rows by Parent==paraTargetPath
+        // tallied hyperlinks from ALL prior paragraphs — a tab/ptab/equation run in
+        // a hyperlink that emitted no `add hyperlink` row of its own would inherit a
+        // phantom hyperlink from an earlier paragraph and route to a non-existent
+        // /hyperlink[K]. Count only rows since this paragraph's own `add p`.
+        int lastParaAdd = items.FindLastIndex(it => it.Command == "add" && it.Type == "p");
+        int emittedHls = 0;
+        for (int hi = lastParaAdd + 1; hi < items.Count; hi++)
+            if (items[hi].Type == "hyperlink"
+                && string.Equals(items[hi].Parent, paraTargetPath, StringComparison.Ordinal))
+                emittedHls++;
         return emittedHls >= kIdx ? rebased : paraTargetPath;
     }
 

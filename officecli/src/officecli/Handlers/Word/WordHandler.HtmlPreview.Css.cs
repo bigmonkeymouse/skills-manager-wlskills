@@ -1475,6 +1475,14 @@ public partial class WordHandler
         // matches the document default — body-level CSS already declares
         // font-family there, so duplicating it on every run span only bloats
         // the HTML and obscures real per-run overrides.
+        // Complex-script slot (cs/csTheme). On the LTR path the primary `font`
+        // above never reads it, so a run that carries a cs face (Arabic / Hebrew
+        // typesetting) for embedded RTL spans dropped that face entirely. Resolve
+        // it separately and append it as a fallback after the primary/Latin faces
+        // so the browser uses it for complex-script glyphs the others lack. LTR
+        // runs only; the RTL path already resolves cs as the primary `font`.
+        var csFont = isRtlRun ? null
+            : (fonts?.ComplexScript?.Value ?? ResolveThemeFont(fonts?.ComplexScriptTheme?.InnerText));
         if (font != null
             && !font.StartsWith("+", StringComparison.Ordinal)
             && !string.Equals(font, ReadDocDefaults().Font, StringComparison.Ordinal))
@@ -1484,9 +1492,40 @@ public partial class WordHandler
             // serif/sans-serif class when neither the primary nor the CJK fallback
             // is installed (matters in headless browsers like Playwright).
             var generic = GenericFontFamily(font);
+            // Latin slot (ascii/hAnsi). When a run carries BOTH a Latin face and a
+            // distinct EastAsia face, Word renders ASCII with the Latin face and
+            // CJK with the EastAsia face. The EA-priority resolution above picked
+            // the EastAsia face as `font`, dropping the Latin one — prepend it so
+            // the browser uses Latin first and falls back to EastAsia (+ its CJK
+            // chain) for glyphs the Latin face lacks. LTR runs only; the RTL path
+            // already resolves CS/Latin and never wants an EastAsia prefix.
+            var latinFont = isRtlRun ? null
+                : (fonts?.Ascii?.Value ?? ResolveThemeFont(fonts?.AsciiTheme?.InnerText)
+                   ?? fonts?.HighAnsi?.Value ?? ResolveThemeFont(fonts?.HighAnsiTheme?.InnerText));
+            var latinPrefix = (latinFont != null
+                && !latinFont.StartsWith("+", StringComparison.Ordinal)
+                && !string.Equals(latinFont, font, StringComparison.Ordinal))
+                ? $"'{CssSanitize(latinFont)}',"
+                : "";
+            var csSuffix = (csFont != null
+                && !csFont.StartsWith("+", StringComparison.Ordinal)
+                && !string.Equals(csFont, font, StringComparison.Ordinal)
+                && !string.Equals(csFont, latinFont, StringComparison.Ordinal))
+                ? $",'{CssSanitize(csFont)}'"
+                : "";
             parts.Add(fallback != null
-                ? $"font-family:'{CssSanitize(font)}',{fallback},{generic}"
-                : $"font-family:'{CssSanitize(font)}',{generic}");
+                ? $"font-family:{latinPrefix}'{CssSanitize(font)}',{fallback}{csSuffix},{generic}"
+                : $"font-family:{latinPrefix}'{CssSanitize(font)}'{csSuffix},{generic}");
+        }
+        else if (csFont != null
+            && !csFont.StartsWith("+", StringComparison.Ordinal)
+            && !string.Equals(csFont, ReadDocDefaults().Font, StringComparison.Ordinal))
+        {
+            // cs-only LTR run (no Latin/EastAsia slot resolved a non-default face):
+            // the complex-script face is the only one declared, so it leads the
+            // stack. Without this the span emitted no font-family at all.
+            var generic = GenericFontFamily(csFont);
+            parts.Add($"font-family:'{CssSanitize(csFont)}',{generic}");
         }
 
         // Size (stored as half-points)
@@ -2763,12 +2802,18 @@ public partial class WordHandler
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ background: #f0f0f0; font-family: {font}; color: {dd.Color}; padding: 20px; }}
         .page-wrapper {{ margin: 0 auto 40px; transition: width 0.15s ease, height 0.15s ease; }}
-        .page {{ background: white; margin: 0 auto; padding: {mT} {mR} {mB} {mL};
+        .page {{ margin: 0 auto; padding: {mT} {mR} {mB} {mL};
             box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 4px;
             min-height: {pageH}; line-height: {lh}; font-size: {sz}; position: relative; overflow-x: auto;
             display: flex; flex-direction: column; font-kerning: none; letter-spacing: 0;
             transform-origin: left top; transition: transform 0.15s ease;
             }}
+        /* The white page fill lives on a pseudo-element behind everything so a
+           behind-text float (z-index:-1) paints ON the page, not under it. A
+           background directly on .page would sit at the stacking-context root and
+           hide any negative-z-index child (watermark/behind-doc image). */
+        .page::before {{ content: ""; position: absolute; inset: 0; background: white;
+            border-radius: 4px; z-index: -2; }}
         .page-body {{ flex: 1; display: flex; flex-direction: column; text-autospace: ideograph-alpha ideograph-numeric; overflow-wrap: anywhere; {hyphensCss} }}
         /* Multi-column sections: flex ignores column-count; switch to block. */
         .page-body[style*=""column-count""] {{ display: block; }}

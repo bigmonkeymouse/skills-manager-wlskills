@@ -364,9 +364,18 @@ public static partial class WordBatchEmitter
                             fieldVertAlign = "subscript";
                     }
                 }
-                else if (k.Type == "picture" && depth == 1)
+                else if (k.Type == "picture" && depth >= 1)
                 {
                     // BUG-DUMP-R28-INCLUDEPICTURE: the cached result drawing.
+                    // BUG-DUMP-NESTEDQUOTE-IMG: capture at ANY field depth, not just
+                    // the outer depth==1. NESTED QUOTE/INCLUDEPICTURE fields
+                    // (begin QUOTE begin QUOTE <drawing> separate <drawing> end end)
+                    // carry their cached image at depth 2; a depth==1-only capture
+                    // left resultPictureNodes empty so the marker-raw + standalone-
+                    // picture rescue below never fired and the nested field's cached
+                    // images were dropped on round-trip. QUOTE/INCLUDEPICTURE just
+                    // re-quote a static cached result, so the image IS the content —
+                    // flattening the field-code wrapper while keeping every image.
                     resultPictureNodes.Add(k);
                 }
                 else if ((k.Type == "bookmark" || k.Type == "bookmarkEnd") && depth == 1)
@@ -401,8 +410,17 @@ public static partial class WordBatchEmitter
                 result.Add(malformedSynth);
                 continue;
             }
-            if (sawNestedField)
+            if (sawNestedField && resultPictureNodes.Count == 0)
             {
+                // BUG-DUMP-NESTEDQUOTE-IMG: a nested field whose cached result is a
+                // DRAWING (nested QUOTE/INCLUDEPICTURE: begin QUOTE begin QUOTE
+                // <drawing> separate <drawing> end end) must NOT take this verbatim
+                // _nestedField slice path — that path's TryEmitFieldRun bails on any
+                // r:embed (HasExternalRelRef treats the image ref as unreconstructable)
+                // and drops the whole field, losing every cached image. Defer to the
+                // resultPictureNodes decomposition below (marker-raw + standalone
+                // add-picture) which preserves the images. Only picture-free nested
+                // fields (IF wrapping PAGE/REF, …) take the verbatim slice here.
                 // BUG-DUMP-R43-5: nested-field branch — the AddField rebuild
                 // path rebuilds a FLAT begin/instr/sep/display/end chain and
                 // cannot represent IF/REF/MERGEFIELD with an embedded child
