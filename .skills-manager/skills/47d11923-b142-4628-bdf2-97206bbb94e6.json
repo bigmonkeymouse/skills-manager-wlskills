@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "skill_id": "47d11923-b142-4628-bdf2-97206bbb94e6",
+  "path": "markitdown-converter",
+  "path_key": "markitdown-converter",
+  "enabled": true,
+  "tags": [],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}
