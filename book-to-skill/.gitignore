@@ -10,6 +10,9 @@ dist/
 build/
 *.egg-info/
 
+# uv lockfile (not pinned for a library/tool; deps live in pyproject extras)
+uv.lock
+
 # Local design specifications
 docs/superpowers/specs/
 

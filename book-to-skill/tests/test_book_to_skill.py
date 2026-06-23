@@ -34,6 +34,7 @@ from book_to_skill.utils import (
     main,
 )
 from book_to_skill.config import SUPPORTED_EXTENSIONS
+from book_to_skill.parsers.docx import extract_docx_with_zipfile
 from book_to_skill.parsers.rtf import strip_rtf_fallback
 
 
@@ -1033,3 +1034,103 @@ class TestRtfUnicodeFallback:
         # Two adjacent \uN escapes, each with a \'XX hex fallback, decode cleanly.
         text = self._BS + "u8220" + self._BS + "'93Hi" + self._BS + "u8221" + self._BS + "'94"
         assert strip_rtf_fallback(text) == "“Hi”"
+
+
+class TestHtmlEntityDecoding:
+    """The stdlib HTML parser decodes entities exactly once (not twice)."""
+
+    def _text(self, fragment):
+        # Feed a raw fragment (no block tags) through a fresh stdlib parser.
+        from book_to_skill.parsers.html import _HTMLTextExtractor
+        p = _HTMLTextExtractor()
+        p.feed(fragment)
+        return p.get_text()
+
+    def test_double_encoded_ampersand(self):
+        # The bug: this used to collapse to "&" (decoded twice).
+        assert self._text("&amp;amp;") == "&amp;"
+
+    def test_double_encoded_tag(self):
+        assert self._text("&amp;lt;tag&amp;gt;") == "&lt;tag&gt;"
+
+    def test_single_entities_still_decode(self):
+        assert self._text("&lt;b&gt;") == "<b>"
+        assert self._text("&amp;") == "&"
+
+    def test_numeric_and_named_entities(self):
+        assert self._text("&#233;") == "é"      # decimal numeric
+        assert self._text("&#xE9;") == "é"      # hex numeric
+        assert self._text("&copy;") == "©"      # non-ASCII named entity
+        assert self._text("hello") == "hello"   # plain text
+
+    def test_skip_tag_content_excluded(self):
+        # Confirms the change didn't disturb skip-tag handling.
+        assert self._text("<style>x{}</style>keep") == "keep"
+
+
+class TestDocxTableReconstruction:
+    """The stdlib DOCX fallback tab-joins table rows and preserves order."""
+
+    _NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+    def _make_docx(self, tmp_path, body_xml):
+        import zipfile
+        p = tmp_path / "t.docx"
+        doc = (
+            '<?xml version="1.0"?>'
+            f'<w:document xmlns:w="{self._NS}"><w:body>{body_xml}</w:body></w:document>'
+        )
+        with zipfile.ZipFile(p, "w") as zf:
+            zf.writestr("word/document.xml", doc)
+        return str(p)
+
+    def _para(self, text):
+        return f"<w:p><w:r><w:t>{text}</w:t></w:r></w:p>"
+
+    def _cell(self, text):
+        return f"<w:tc><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:tc>"
+
+    def test_table_rows_are_tab_joined(self, tmp_path):
+        body = (
+            self._para("Intro")
+            + "<w:tbl><w:tr>" + self._cell("Name") + self._cell("Value") + "</w:tr>"
+            + "<w:tr>" + self._cell("foo") + self._cell("1") + "</w:tr></w:tbl>"
+        )
+        out = extract_docx_with_zipfile(self._make_docx(tmp_path, body))
+        assert "Name\tValue" in out
+        assert "foo\t1" in out
+
+    def test_document_order_preserved(self, tmp_path):
+        body = (
+            self._para("Before")
+            + "<w:tbl><w:tr>" + self._cell("R1C1") + self._cell("R1C2") + "</w:tr></w:tbl>"
+            + self._para("After")
+        )
+        out = extract_docx_with_zipfile(self._make_docx(tmp_path, body))
+        assert out.index("Before") < out.index("R1C1") < out.index("After")
+
+    def test_paragraph_only_document_unchanged(self, tmp_path):
+        body = self._para("Just a paragraph") + self._para("And another")
+        out = extract_docx_with_zipfile(self._make_docx(tmp_path, body))
+        assert out == "Just a paragraph\nAnd another"
+
+    def test_empty_cell_still_tab_joined(self, tmp_path):
+        body = (
+            "<w:tbl><w:tr>" + self._cell("A")
+            + "<w:tc><w:p></w:p></w:tc></w:tr></w:tbl>"
+        )
+        out = extract_docx_with_zipfile(self._make_docx(tmp_path, body))
+        # "\t".join(["A", ""]) -> "A\t"; the empty cell becomes an empty field.
+        assert out == "A\t"
+
+    def test_sdt_wrapped_content_is_preserved(self, tmp_path):
+        # Word wraps TOC/cover-page/form content in <w:sdt> content controls,
+        # which are direct children of <w:body> but not <w:p>/<w:tbl>. The
+        # recursive walk must still find paragraphs/tables inside them.
+        body = (
+            self._para("Before")
+            + "<w:sdt><w:sdtContent>" + self._para("Inside SDT") + "</w:sdtContent></w:sdt>"
+            + self._para("After")
+        )
+        out = extract_docx_with_zipfile(self._make_docx(tmp_path, body))
+        assert out == "Before\nInside SDT\nAfter"

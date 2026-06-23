@@ -120,3 +120,49 @@ jobs:
           fail-on-severity: moderate
           # Always leave the findings as a comment on the PR, even when clean.
           comment-summary-in-pr: always
+
+  pr-template:
+    name: PR description check (PR)
+    # Enforces the PR template: required sections present, a type-of-change
+    # selected, and every Required-checklist item ticked. Skips Dependabot.
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR description
+        # The body is passed via env (never interpolated into the shell) so a
+        # crafted PR description cannot inject commands.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          body = os.environ.get("PR_BODY") or ""
+
+          def section(header):
+              i = body.find(header)
+              if i < 0:
+                  return ""
+              rest = body[i + len(header):]
+              j = rest.find("\n## ")
+              return rest if j < 0 else rest[:j]
+
+          required = [
+              "## Summary", "## Type of change", "## What it does",
+              "## Motivation & context", "## Evidence", "## Checklist",
+          ]
+          errs = [f"missing required section: {h}" for h in required if h not in body]
+          if "- [x]" not in section("## Type of change").lower():
+              errs.append("Type of change: tick at least one box with [x]")
+          if "- [ ]" in section("## Checklist"):
+              errs.append("Checklist: every Required item must be ticked [x]")
+          if len(body.strip()) < 200:
+              errs.append("description too short, please fill the template")
+
+          if errs:
+              print("PR description is incomplete:\n")
+              for e in errs:
+                  print("  - " + e)
+              print("\nFill the PR template (all (Required) sections) and push again.")
+              sys.exit(1)
+          print("PR description looks complete.")
+          PY
