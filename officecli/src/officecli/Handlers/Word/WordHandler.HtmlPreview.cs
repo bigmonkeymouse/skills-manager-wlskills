@@ -59,6 +59,20 @@ public partial class WordHandler
         // length. -1 means "not tracking" (reset per paragraph).
         public int CurrentParagraphTabSegmentStart { get; set; } = -1;
 
+        // Tab alignment band model: true while rendering a paragraph whose tab
+        // stops include a center/right (no-leader) positional stop — the
+        // three-part "Left \t Center \t Right" header shape. In this mode each
+        // <w:tab/> closes the current leading text in a flex band and the
+        // upcoming stop's Val decides the band's text-align, so segments stay
+        // on one line and land left/centre/right (see has-aligned-tab CSS).
+        // Reset per paragraph.
+        public bool CurrentParagraphAlignedTab { get; set; }
+
+        // CSS text-align for the CURRENT aligned-tab band (the text typed before
+        // the next <w:tab/>). Band 0 (before the first tab) is left-aligned; each
+        // tab sets this to its own Val (center/right) for the band it opens.
+        public string CurrentAlignedTabAlign { get; set; } = "left";
+
         public void ResetLineForParagraph(double contentWidthPt, double firstLineIndentPt, double defaultSizePt)
         {
             LineWidthPt = contentWidthPt - firstLineIndentPt;
@@ -574,6 +588,22 @@ public partial class WordHandler
         sb.AppendLine("  function pickHtpl(n){return (etpl&&n%2===0)?etpl:htpl;}");
         sb.AppendLine("  function pickFtpl(n){return (eftpl&&n%2===0)?eftpl:ftpl;}");
         sb.AppendLine(@"
+  // Out-of-flow children (position:absolute/fixed — full-page background
+  // layers, behind-text watermarks, floating anchored drawings) are removed
+  // from the normal document flow and do NOT occupy vertical space for the
+  // content that follows them. A full-page background div
+  // (position:absolute;height:100%) reports offsetHeight==page-height, so if
+  // the pagination height math counted it as flow content it would think the
+  // hosting paragraph is a full page tall and push the real content (title,
+  // body) onto subsequent pages, splitting the cover and shifting the whole
+  // document down. Skip these elements when measuring flow height / picking
+  // split points so they paint where the renderer placed them without
+  // displacing in-flow siblings.
+  function isOutOfFlow(el){
+    if(!el||el.nodeType!==1)return false;
+    var pos=getComputedStyle(el).position;
+    return pos==='absolute'||pos==='fixed';
+  }
   function paginate(){
     var pages=document.querySelectorAll('.page');
     // Sync mode + page filter: bail once pages beyond max-requested exist
@@ -592,6 +622,7 @@ public partial class WordHandler
           var sch=0;
           Array.from(sb_.children).forEach(function(c){
             if(c.classList.contains('footnotes'))return;
+            if(isOutOfFlow(c))return;
             var bt=c.offsetTop+c.offsetHeight-sb_.offsetTop;
             if(bt>sch)sch=bt;
           });
@@ -612,6 +643,7 @@ public partial class WordHandler
       var contentH=0;
       Array.from(body.children).forEach(function(c){
         if(c.classList.contains('footnotes'))return;
+        if(isOutOfFlow(c))return;
         var b=c.offsetTop+c.offsetHeight-body.offsetTop;
         if(b>contentH)contentH=b;
       });
@@ -626,6 +658,7 @@ public partial class WordHandler
       var splitIdx=-1;
       for(var ci=0;ci<children.length;ci++){
         if(children[ci].classList.contains('footnotes'))continue;
+        if(isOutOfFlow(children[ci]))continue;
         var bot=children[ci].offsetTop+children[ci].offsetHeight-body.offsetTop;
         if(bot>availH+2){splitIdx=ci;break;}
       }
@@ -748,6 +781,10 @@ public partial class WordHandler
         var movable=[];
         for(var mi=splitIdx;mi<children.length;mi++){
           if(children[mi].classList.contains('footnotes'))continue;
+          // Out-of-flow layers (full-page background, watermark, floating
+          // drawing) are positioned relative to THIS .page; leave them on the
+          // source page and don't let them participate in split height math.
+          if(isOutOfFlow(children[mi]))continue;
           movable.push({el:children[mi],top:children[mi].offsetTop-bodyT,h:children[mi].offsetHeight});
         }
         if(movable.length===0)continue;
@@ -808,7 +845,9 @@ public partial class WordHandler
         // amortized across event loop turns).
         var toMove=[];
         for(var mi=splitIdx;mi<children.length;mi++){
-          if(!children[mi].classList.contains('footnotes'))toMove.push(children[mi]);
+          if(children[mi].classList.contains('footnotes'))continue;
+          if(isOutOfFlow(children[mi]))continue;
+          toMove.push(children[mi]);
         }
         if(toMove.length===0)continue;
         var nw=document.createElement('div');
@@ -866,6 +905,7 @@ public partial class WordHandler
       var visibleCount=0;
       Array.from(b.children).forEach(function(c){
         if(c.classList.contains('footnotes'))return;
+        if(isOutOfFlow(c))return;
         var bt=c.offsetTop+c.offsetHeight-b.offsetTop;
         if(bt>ch)ch=bt;
         if(c.offsetHeight>0)visibleCount++;
@@ -1681,11 +1721,19 @@ public partial class WordHandler
             {
                 if (hp.Header == null) continue;
                 if (!HeaderFooterHasContent(hp.Header)) continue;
-                sb.AppendLine($"<div class=\"{cssClass}\">");
                 var savedHost = _ctx.ImageHostPart;
                 _ctx.ImageHostPart = hp;
-                RenderHeaderFooterBody(sb, hp.Header);
+                // Watermark spans are collected separately so they can be
+                // emitted OUTSIDE the .doc-header div — the watermark must
+                // be centered on the whole page (.page is its positioning
+                // ancestor), not pinned inside the narrow header band.
+                var headerBodySb = new StringBuilder();
+                var watermarkSb = new StringBuilder();
+                RenderHeaderFooterBody(headerBodySb, hp.Header, watermarkSb);
                 _ctx.ImageHostPart = savedHost;
+                sb.Append(watermarkSb);
+                sb.AppendLine($"<div class=\"{cssClass}\">");
+                sb.Append(headerBodySb);
                 sb.AppendLine("</div>");
                 break;
             }
@@ -1698,11 +1746,15 @@ public partial class WordHandler
             {
                 if (fp.Footer == null) continue;
                 if (!HeaderFooterHasContent(fp.Footer)) continue;
-                sb.AppendLine($"<div class=\"{cssClass}\">");
                 var savedHost = _ctx.ImageHostPart;
                 _ctx.ImageHostPart = fp;
-                RenderHeaderFooterBody(sb, fp.Footer);
+                var footerBodySb = new StringBuilder();
+                var watermarkSb = new StringBuilder();
+                RenderHeaderFooterBody(footerBodySb, fp.Footer, watermarkSb);
                 _ctx.ImageHostPart = savedHost;
+                sb.Append(watermarkSb);
+                sb.AppendLine($"<div class=\"{cssClass}\">");
+                sb.Append(footerBodySb);
                 sb.AppendLine("</div>");
                 break;
             }
@@ -1737,7 +1789,7 @@ public partial class WordHandler
     /// <summary>Iterate header/footer children in order, rendering paragraphs
     /// and tables. Previously only paragraphs were emitted, dropping layout
     /// tables and image-only paragraphs.</summary>
-    private void RenderHeaderFooterBody(StringBuilder sb, OpenXmlElement hf)
+    private void RenderHeaderFooterBody(StringBuilder sb, OpenXmlElement hf, StringBuilder? watermarkSb = null)
     {
         foreach (var child in hf.ChildElements)
         {
@@ -1745,7 +1797,7 @@ public partial class WordHandler
             // recurse so they render the same as direct paragraph children.
             if (child is SdtBlock sdt && sdt.SdtContentBlock is { } content)
             {
-                RenderHeaderFooterBody(sb, content);
+                RenderHeaderFooterBody(sb, content, watermarkSb);
                 continue;
             }
             if (child is Paragraph para)
@@ -1761,13 +1813,26 @@ public partial class WordHandler
                     var colorCss = string.IsNullOrWhiteSpace(watermarkColor)
                         ? "#d0d0d0"
                         : (watermarkColor!.StartsWith("#") ? watermarkColor : "#" + watermarkColor);
-                    sb.Append($"<span class=\"vml-watermark\" style=\"position:absolute;" +
-                              "top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);" +
-                              $"color:{colorCss};font-size:7em;font-weight:bold;" +
-                              "z-index:0;pointer-events:none;white-space:nowrap;" +
-                              "user-select:none\">");
-                    sb.Append(HtmlEncode(watermarkText));
-                    sb.Append("</span>");
+                    // The watermark must be centered over the whole page, so it
+                    // is wrapped in a full-page layer (position:absolute;inset:0)
+                    // that the caller emits as a direct child of .page — NOT
+                    // inside .doc-header (whose narrow band would pin the
+                    // top:50%/left:50% anchor to the header strip, leaving the
+                    // watermark in the upper-left quadrant). The inner span's
+                    // 50%/50% then resolves against this full-page layer.
+                    var watermarkHtml =
+                        "<div class=\"vml-watermark-layer\" style=\"position:absolute;inset:0;" +
+                        "z-index:0;pointer-events:none\">" +
+                        $"<span class=\"vml-watermark\" style=\"position:absolute;" +
+                        "top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);" +
+                        $"color:{colorCss};font-size:7em;font-weight:bold;" +
+                        "pointer-events:none;white-space:nowrap;user-select:none\">" +
+                        HtmlEncode(watermarkText) +
+                        "</span></div>";
+                    // Prefer the dedicated watermark buffer (emitted outside
+                    // .doc-header); fall back to inline if a caller didn't
+                    // provide one (keeps older call paths working).
+                    (watermarkSb ?? sb).Append(watermarkHtml);
                     continue;
                 }
                 RenderParagraphHtml(sb, para);
@@ -2150,8 +2215,10 @@ public partial class WordHandler
                         listStyleParts += ";list-style-image:none"; // reset inherited picture bullet
                         // Map Word bullet character to CSS list-style-type.
                         // CONSISTENCY(bullet-glyph-map): shared with table-cell
-                        // path and GetCustomListStyleString; null => disc.
-                        var bulletType = BulletGlyphToCssKeyword(lvlText ?? "") ?? "disc";
+                        // path and GetCustomListStyleString; default disc.
+                        // Symbol-font bullets resolve to the custom glyph string
+                        // so an inline keyword doesn't override the ::marker.
+                        var bulletType = GetUlListStyleTypeCss(numId, ilvl, lvlText);
                         listStyleParts += $";list-style-type:{bulletType}";
                     }
                     var indentStyle = $" style=\"{listStyleParts}\"";
@@ -2432,10 +2499,14 @@ public partial class WordHandler
                     var pTag = HasBlockLevelDrawing(para) ? "div" : "p";
                     sb.Append("<").Append(pTag);
                     sb.Append($" data-path=\"/body/p[{wParaCount}]\"");
-                    // Add CSS class for TOC paragraphs (suppress hyperlink styling, enable dot leaders)
+                    // Add CSS class for TOC paragraphs (suppress hyperlink styling, enable dot leaders).
+                    // Match by resolved style NAME too, not just styleId prefix: WPS / localized
+                    // Word emit numeric styleIds (e.g. "28") whose display name is "toc 1", so a
+                    // styleId-only test silently misses their TOC entries and leaks the Hyperlink
+                    // character-style color. See IsTocParagraphStyle in HtmlPreview.Text.cs.
                     var paraStyleId = para.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
                     var classNames = new List<string>();
-                    if (paraStyleId != null && paraStyleId.StartsWith("TOC", StringComparison.OrdinalIgnoreCase))
+                    if (IsTocParagraphStyle(paraStyleId, GetStyleName(para)))
                         classNames.Add("toc");
                     // CONSISTENCY(run-special-content): body-path render must
                     // also flag has-ptab so the paragraph becomes a flex
@@ -2447,6 +2518,8 @@ public partial class WordHandler
                         classNames.Add("has-ptab");
                     if (ParagraphHasLeaderTab(para))
                         classNames.Add("has-leader-tab");
+                    else if (ParagraphHasAlignedTab(para))
+                        classNames.Add("has-aligned-tab");
                     if (classNames.Count > 0)
                         sb.Append($" class=\"{string.Join(" ", classNames)}\"");
                     var pStyle = GetParagraphInlineCss(para);
@@ -2474,7 +2547,10 @@ public partial class WordHandler
             else if (element is Table table)
             {
                 CloseAllLists(sb, listStack, ref currentListType, ref pendingLiClose);
-                RenderTableHtml(sb, table, dataPath: $"/body/table[{wTableCount}]");
+                // Thread the body walk's ordered-list counter so a table cell's
+                // <ol> continues document-flow numbering (Word advances the
+                // counter through table paragraphs too). (CONSISTENCY(list-marker))
+                RenderTableHtml(sb, table, dataPath: $"/body/table[{wTableCount}]", olState: olState);
             }
             else if (element is AltChunk altChunk)
             {
@@ -2543,11 +2619,17 @@ public partial class WordHandler
                         && HeaderFooterHasContent(hp.Header))
                     {
                         var sb = new StringBuilder();
-                        sb.Append("<div class=\"doc-header\">");
                         var savedHost = _ctx.ImageHostPart;
                         _ctx.ImageHostPart = hp;
-                        RenderHeaderFooterBody(sb, hp.Header);
+                        // Watermark lifted out of .doc-header so it centers on
+                        // the whole page (see RenderHeaderFooterHtml).
+                        var bodySb = new StringBuilder();
+                        var watermarkSb = new StringBuilder();
+                        RenderHeaderFooterBody(bodySb, hp.Header, watermarkSb);
                         _ctx.ImageHostPart = savedHost;
+                        sb.Append(watermarkSb);
+                        sb.Append("<div class=\"doc-header\">");
+                        sb.Append(bodySb);
                         sb.Append("</div>");
                         html = sb.ToString();
                     }
@@ -2555,11 +2637,15 @@ public partial class WordHandler
                         && HeaderFooterHasContent(fp.Footer))
                     {
                         var sb = new StringBuilder();
-                        sb.Append("<div class=\"doc-footer\">");
                         var savedHost = _ctx.ImageHostPart;
                         _ctx.ImageHostPart = fp;
-                        RenderHeaderFooterBody(sb, fp.Footer);
+                        var bodySb = new StringBuilder();
+                        var watermarkSb = new StringBuilder();
+                        RenderHeaderFooterBody(bodySb, fp.Footer, watermarkSb);
                         _ctx.ImageHostPart = savedHost;
+                        sb.Append(watermarkSb);
+                        sb.Append("<div class=\"doc-footer\">");
+                        sb.Append(bodySb);
                         sb.Append("</div>");
                         html = sb.ToString();
                     }

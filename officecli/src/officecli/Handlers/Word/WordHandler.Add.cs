@@ -634,6 +634,17 @@ public partial class WordHandler
                     settingsPart.Settings.Save();
                     break;
 
+                case "recalcfields":
+                    // Compute + write cached values we can do WITHOUT a layout
+                    // engine: today that's SEQ numbering (document-order count).
+                    // PAGE/PAGEREF/TOC page numbers need pagination — pair with
+                    // `--prop updateFields=true` to defer those to Word.
+                    if (value.Trim().ToLowerInvariant() is "seq" or "all" or "true" or "")
+                        RecalcSeqFields();
+                    else
+                        (unsupported ??= new()).Add($"recalcFields={value} (supported: seq)");
+                    break;
+
                 case "defaultfont":
                     // Delegate to TrySetDocDefaults which uses EnsureRunPropsDefault()
                     // to create the DocDefaults chain when absent (e.g. blank documents).

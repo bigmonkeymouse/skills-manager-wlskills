@@ -1032,6 +1032,64 @@ public static partial class WordBatchEmitter
                 });
             }
         }
+        // BUG-DUMP-TABLE-STRUCT-BOOKMARK: re-insert any <w:bookmarkStart>/<w:bookmarkEnd>
+        // that sat at table-structure level (a direct child of <w:tbl> between rows,
+        // or of <w:tr> between cells). The typed emit above only walks rows/cells, so
+        // these cross-reference targets were dropped, leaving dangling PAGEREF/REF
+        // ("Error! Bookmark not defined."). Replay each verbatim at its source
+        // position via raw-set. Restricted to body tables, where the (//w:tbl)[N]
+        // selector + /document part are reliable (same restriction as the tblGrid
+        // raw-set above); header/footer/nested-table structural bookmarks are rare
+        // and deferred.
+        if (containerPath == "/body")
+        {
+            // BUG-DUMP-FF-BOOKMARK-DUP: a row-level bookmark that WRAPS a legacy
+            // form field (FORMTEXT/FORMCHECKBOX) is emitted by TWO paths — the form
+            // field's own `add formfield` recreates its wrapping bookmark (consuming
+            // one unit of the per-name bookmark budget), and this structural
+            // re-injection would emit it a SECOND time, duplicating the bookmark
+            // name (Word de-dups/drops one, breaking the form field / REF). The cell
+            // emit runs before this pass, so a form-field bookmark's budget is
+            // already spent here: skip a lone named start whose budget is exhausted,
+            // and its matching lone end (by id). A genuinely structural-only bookmark
+            // (e.g. a _Toc heading anchor with no form field) still has budget and is
+            // emitted (and accounted). Coalesced zero-length bookmarks (start+end in
+            // one fragment) are structural-only and pass through.
+            var skippedBmIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (bmXml, relXpath, action) in word.GetTableStructuralBookmarks(sourcePath))
+            {
+                var starts = System.Text.RegularExpressions.Regex.Matches(bmXml, "<w:bookmarkStart\\b");
+                var ends = System.Text.RegularExpressions.Regex.Matches(bmXml, "<w:bookmarkEnd\\b");
+                // Lone named start: claim a budget unit; if none remain it was already
+                // emitted by a form field — skip it and remember its id.
+                if (starts.Count == 1 && ends.Count == 0)
+                {
+                    var nameM = System.Text.RegularExpressions.Regex.Match(bmXml, "w:name=\"([^\"]*)\"");
+                    var idM = System.Text.RegularExpressions.Regex.Match(bmXml, "<w:bookmarkStart\\b[^>]*w:id=\"(\\d+)\"");
+                    if (nameM.Success && ctx != null && !ctx.ConsumeBookmarkBudget(word, nameM.Groups[1].Value))
+                    {
+                        if (idM.Success) skippedBmIds.Add(idM.Groups[1].Value);
+                        continue;
+                    }
+                }
+                // Lone end whose matching start was skipped: drop it too.
+                else if (ends.Count == 1 && starts.Count == 0)
+                {
+                    var idM = System.Text.RegularExpressions.Regex.Match(bmXml, "<w:bookmarkEnd\\b[^>]*w:id=\"(\\d+)\"");
+                    if (idM.Success && skippedBmIds.Contains(idM.Groups[1].Value))
+                        continue;
+                }
+                items.Add(new BatchItem
+                {
+                    Command = "raw-set",
+                    Part = "/document",
+                    Xpath = $"(//w:tbl)[{tableOrdinal}]/{relXpath}",
+                    Action = action,
+                    Xml = bmXml,
+                });
+            }
+        }
+
         // BUG-DUMP-R26-7: clear the cell-XPath context once this table is fully
         // emitted so body/header/footer content AFTER the table (or a parent
         // cell's content after a nested table) doesn't inherit a stale cell
